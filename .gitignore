@@ -1,0 +1,7 @@
+
+# Never commit private invitation data or local database state
+node_modules/
+.private/
+.wrangler/
+.env*
+*.sqlite*

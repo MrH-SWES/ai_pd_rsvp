@@ -1,0 +1,1 @@
+{"name":"pd-rsvp-backend","private":true,"type":"module","scripts":{"test":"node --test","provision":"node scripts/provision.mjs"},"engines":{"node":">=22"}}

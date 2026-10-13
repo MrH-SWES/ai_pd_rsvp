@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {validateAnswer,emptyAnswer,sampleSessions} from './lib/survey.ts';
+let count=0;function test(name,fn){fn();count++;console.log('PASS',name)}
+const good={...emptyAnswer,experience:'Regularly',availability:['sample-a']};
+test('valid named session',()=>assert.equal(validateAnswer(good,sampleSessions).availability[0],'sample-a'));
+test('both dates are availability',()=>assert.equal(validateAnswer({...good,availability:['sample-a','sample-b']},sampleSessions).availability.length,2));
+test('reject forged session',()=>assert.throws(()=>validateAnswer({...good,availability:['x']},sampleSessions)));
+test('reject exclusive combination',()=>assert.throws(()=>validateAnswer({...good,availability:['neither','sample-a']},sampleSessions)));
+test('require availability',()=>assert.throws(()=>validateAnswer({...good,availability:[]},sampleSessions)));
+test('allow cannot commit',()=>assert.equal(validateAnswer({...good,availability:['updates']},sampleSessions).availability[0],'updates'));
+test('reject missing experience',()=>assert.throws(()=>validateAnswer({...good,experience:''},sampleSessions)));
+test('reject oversized text',()=>assert.throws(()=>validateAnswer({...good,question:'a'.repeat(3001)},sampleSessions)));
+test('reject unknown tool',()=>assert.throws(()=>validateAnswer({...good,tools:['forged']},sampleSessions)));
+test('limit two perspectives',()=>assert.throws(()=>validateAnswer({...good,beliefs:['A useful thinking partner','Mostly a better search engine','A fad']},sampleSessions)));
+test('clear stale beginner choices',()=>assert.deepEqual(validateAnswer({...good,experience:'Not yet',tools:['ChatGPT'],uses:['Emails & writing']},sampleSessions).tools,[]));
+test('exclusive hesitation',()=>assert.throws(()=>validateAnswer({...good,blockers:['Nothing in particular','Student privacy']},sampleSessions)));
+test('duplicate selections',()=>assert.throws(()=>validateAnswer({...good,tools:['Claude','Claude']},sampleSessions)));
+test('discard extra fields',()=>assert.equal('email' in validateAnswer({...good,email:'ignored'},sampleSessions),false));
+test('trim written content',()=>assert.equal(validateAnswer({...good,question:' hi '},sampleSessions).question,'hi'));
+console.log(`${count} tests passed`);

@@ -1,0 +1,17 @@
+name = "pd-rsvp-api"
+main = "src/worker.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[vars]
+# Exact frontend origin, WITHOUT a repository path or trailing slash.
+ALLOWED_ORIGIN = "https://REPLACE-ME.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "pd-rsvp"
+database_id = "REPLACE-WITH-D1-DATABASE-ID"
+migrations_dir = "migrations"
+
+[observability]
+enabled = false

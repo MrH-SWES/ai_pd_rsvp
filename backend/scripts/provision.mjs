@@ -1,0 +1,20 @@
+// Local file generation only. Never calls Cloudflare or another network service.
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import {randomBytes,createHash} from 'node:crypto';
+import {resolve,join} from 'node:path';
+import {validateSessions} from '../src/worker.js';
+const [namesPath,sessionsPath,frontendURL,outDir='private'] = process.argv.slice(2);
+if(!namesPath || !sessionsPath || !frontendURL) throw Error('Usage: node scripts/provision.mjs private/names.json private/sessions.json https://OWNER.github.io/REPO/ [private/output]');
+const names=JSON.parse(await readFile(namesPath,'utf8'));
+if(!Array.isArray(names)||!names.length||names.some(n=>typeof n!=='string'||!n.trim()||n.length>200)) throw Error('Names must be a nonempty JSON array of strings, at most 200 characters each.');
+const sessions=validateSessions(JSON.parse(await readFile(sessionsPath,'utf8')));
+if(!sessions.length) throw Error('Supply confirmed sessions before provisioning.');
+const base=new URL(frontendURL);
+if(base.protocol!=='https:'||base.username||base.password||base.search||base.hash) throw Error('Frontend URL must be HTTPS with no credentials, query, or fragment.');
+const quote=s=>"'"+s.replaceAll("'","''")+"'";
+const rows=names.map(name=>{const token=randomBytes(32).toString('hex');const url=new URL(base);url.hash='invite='+token;return {name:name.trim(),hash:createHash('sha256').update(token).digest('hex'),url:url.href};});
+const sql=[...rows.map(r=>`INSERT INTO invitations (hash,name) VALUES (${quote(r.hash)},${quote(r.name)});`),`INSERT INTO settings (key,value) VALUES ('sessions',${quote(JSON.stringify(sessions))}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`].join('\n')+'\n';
+const out=resolve(outDir);await mkdir(out,{recursive:true,mode:0o700});
+await writeFile(join(out,'provision.sql'),sql,{mode:0o600,flag:'wx'});
+await writeFile(join(out,'invitation-links.json'),JSON.stringify(rows.map(({name,url})=>({name,url})),null,2)+'\n',{mode:0o600,flag:'wx'});
+console.log('Created private provisioning SQL and invitation-links.json. No network calls were made. Treat links as passwords; do not commit or upload them.');
