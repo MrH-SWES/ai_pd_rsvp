@@ -8,7 +8,7 @@ export const experiences = ['Regularly','A few times','Once or twice','Not yet',
 export type Answer = { experience:string; tools:string[]; uses:string[]; beliefs:string[]; blockers:string[]; example:string; question:string; availability:string[] };
 export const emptyAnswer:Answer={experience:'',tools:[],uses:[],beliefs:[],blockers:[],example:'',question:'',availability:[]};
 export type Session={id:string;label:string;detail:string};
-export const sampleSessions:Session[]=[{id:'sample-a',label:'Monday, October 19',detail:'3:45–4:45 p.m. Pacific · Proposed'}, {id:'sample-b',label:'Monday, October 26',detail:'3:20–4:20 p.m. Pacific · Proposed'}];
+export const sampleSessions:Session[]=[{id:'sample-a',label:'Tuesday option',detail:'Date and time to be confirmed'}, {id:'sample-b',label:'Thursday option',detail:'Date and time to be confirmed'}];
 export function validateAnswer(v:unknown,sessions:Session[]):Answer {
  if(!v||typeof v!=='object')throw Error('Please review your answers.');
  const a=v as Answer;if(!experiences.includes(a.experience))throw Error('Choose an experience option.');
