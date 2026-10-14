@@ -5,13 +5,23 @@ export const groups = {
  blockers: [['Choose any that fit','Accuracy & trust','Student privacy','Bias & fairness','Student learning','School policy','Time to learn','Cost or access','Where to start','Something else','Nothing in particular']]
 };
 export const experiences = ['Regularly','A few times','Once or twice','Not yet','Not sure'];
-export type Answer = { experience:string; tools:string[]; uses:string[]; beliefs:string[]; blockers:string[]; example:string; question:string; availability:string[] };
-export const emptyAnswer:Answer={experience:'',tools:[],uses:[],beliefs:[],blockers:[],example:'',question:'',availability:[]};
+export const interests = [
+ {id:'curious',label:'I hear a lot about it. I’d like to know a little more.'},
+ {id:'interested',label:'I’m interested, especially if it could make my day easier.'},
+ {id:'eager',label:'I’m excited to learn and ready to try things.'},
+ {id:'eager_unsure',label:'I really want to learn. I just don’t know where to start.'}
+] as const;
+export type Interest = typeof interests[number]['id'];
+export type Answer = { interest?:Interest|''; experience:string; tools:string[]; uses:string[]; beliefs:string[]; blockers:string[]; example:string; question:string; availability:string[] };
+export const emptyAnswer:Answer={interest:'',experience:'',tools:[],uses:[],beliefs:[],blockers:[],example:'',question:'',availability:[]};
 export type Session={id:string;label:string;detail:string};
 export const sampleSessions:Session[]=[{id:'session-a',label:'Tuesday, November 3, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'}, {id:'session-b',label:'Thursday, November 5, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'}];
 export function validateAnswer(v:unknown,sessions:Session[]):Answer {
  if(!v||typeof v!=='object')throw Error('Please review your answers.');
- const a=v as Answer;if(!experiences.includes(a.experience))throw Error('Choose an experience option.');
+ const a=v as Answer;
+ // Older payloads did not include interest; never invent an answer for them.
+ if(a.interest!==undefined&&!interests.some(option=>option.id===a.interest))throw Error('Choose how interested you are.');
+ if(!experiences.includes(a.experience))throw Error('Choose an experience option.');
  for(const k of ['tools','uses','beliefs','blockers'] as const){const allowed=groups[k].flatMap(g=>g.slice(1));if(!Array.isArray(a[k])||a[k].some(x=>!allowed.includes(x))||new Set(a[k]).size!==a[k].length)throw Error('Invalid selection.');}
  if(a.beliefs.length>2)throw Error('Choose up to two perspectives.');
  if(a.tools.includes('I don’t remember')&&a.tools.length>1)throw Error('Choose named tools or “I don’t remember”.');
@@ -20,6 +30,7 @@ export function validateAnswer(v:unknown,sessions:Session[]):Answer {
  const ids=[...sessions.map(s=>s.id),'neither','updates'];
  if(!Array.isArray(a.availability)||!a.availability.length||a.availability.some(x=>!ids.includes(x))||new Set(a.availability).size!==a.availability.length)throw Error('Choose a session or another availability option.');
  if(a.availability.length>1)throw Error('Choose one session or one other availability option.');
- return {experience:a.experience,tools:a.experience==='Not yet'?[]:a.tools,uses:a.experience==='Not yet'?[]:a.uses,beliefs:a.beliefs,blockers:a.blockers,example:a.example.trim(),question:a.question.trim(),availability:a.availability};
+ return {...(a.interest===undefined?{}:{interest:a.interest}),experience:a.experience,tools:a.experience==='Not yet'?[]:a.tools,uses:a.experience==='Not yet'?[]:a.uses,beliefs:a.beliefs,blockers:a.blockers,example:a.example.trim(),question:a.question.trim(),availability:a.availability};
 }
+
 

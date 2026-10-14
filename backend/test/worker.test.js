@@ -88,3 +88,24 @@ test('storage failure is not reported as saved; private errors never leak',async
   const f=await fixture({writeFail:true}); assert.equal((await f.post()).status,503);
   const g=await fixture({fail:true});const r=await g.call();assert.equal(r.status,503);assert.ok(!(await r.text()).includes('PRIVATE'));
 });
+
+
+test('interest enum is recorded separately from experience for every level',async()=>{
+  for(const interest of ['curious','interested','eager','eager_unsure']){
+    const f=await fixture();const r=await f.post({...answer,interest,experience:'Not yet'});
+    assert.equal(r.status,200);assert.deepEqual(await r.json(),{ok:true});
+    const stored=f.db.responses.get(f.hash).payload;
+    assert.equal(stored.interest,interest);assert.equal(stored.experience,'Not yet');assert.deepEqual(stored.tools,[]);
+  }
+});
+test('invalid supplied interest never writes',async()=>{
+  for(const interest of ['',null,[],['curious'],4,'extremely_interested']){
+    const f=await fixture();assert.equal((await f.post({...answer,interest})).status,400);assert.equal(f.db.responses.size,0);
+  }
+});
+test('legacy client/token remains compatible without assigning a false interest level',async()=>{
+  const f=await fixture();assert.equal((await f.call()).status,200);assert.equal((await f.post(answer)).status,200);
+  assert.equal('interest' in f.db.responses.get(f.hash).payload,false);
+  assert.equal((await f.post({...answer,interest:'eager_unsure'})).status,200);
+  assert.equal(f.db.responses.size,1);assert.equal(f.db.responses.get(f.hash).payload.interest,'eager_unsure');
+});

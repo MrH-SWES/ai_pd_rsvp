@@ -94,3 +94,13 @@ To revoke a link, hash its 64-character token locally with SHA-256 (same `hashTo
 - [Cloudflare D1 prepared statements](https://developers.cloudflare.com/d1/worker-api/prepared-statements/)
 - [Cloudflare D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)
 - [Cloudflare D1 Wrangler commands](https://developers.cloudflare.com/d1/wrangler-commands/)
+
+
+
+## Interest-intensity response field
+
+The questionnaire now collects `interest` separately from `experience`. Its stable values are `curious`, `interested`, `eager`, and `eager_unsure`; the final value deliberately represents high interest with uncertainty about where to start. Do not interpret a lack of AI experience as low interest.
+
+`src/survey.js` preserves valid interest values in the response JSON payload. No database migration is needed: responses are already stored as validated JSON in `responses.payload`. Existing invitations and token handling are unchanged. Existing payloads or old clients with no `interest` field remain valid; absence means the question was not answered or was not yet asked, and must not be converted to an interest level. Supplied invalid or empty values are rejected.
+
+The new frontend requires an interest choice before continuing and includes the readable choice in review. This source update does not itself deploy the Worker or enable collection. The GitHub Pages preview continues to send and save nothing. Deploy the matching Worker source before enabling a live API URL so the new field is retained.

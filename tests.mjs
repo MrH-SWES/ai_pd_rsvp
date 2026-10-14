@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
-import {validateAnswer,emptyAnswer,sampleSessions} from './lib/survey.ts';
+import {validateAnswer,emptyAnswer,sampleSessions,interests} from './lib/survey.ts';
 let count=0;function test(name,fn){fn();count++;console.log('PASS',name)}
-const good={...emptyAnswer,experience:'Regularly',availability:['session-a']};
+const good={...emptyAnswer,interest:'interested',experience:'Regularly',availability:['session-a']};
 test('valid named session',()=>assert.equal(validateAnswer(good,sampleSessions).availability[0],'session-a'));
 test('reject both dates because sessions are identical',()=>assert.throws(()=>validateAnswer({...good,availability:['session-a','session-b']},sampleSessions),/Choose one session/));
 test('reject forged session',()=>assert.throws(()=>validateAnswer({...good,availability:['x']},sampleSessions)));
@@ -20,5 +20,10 @@ test('trim written content',()=>assert.equal(validateAnswer({...good,question:' 
 test('both approved dates and times are present',()=>assert.deepEqual(sampleSessions,[{id:'session-a',label:'Tuesday, November 3, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'},{id:'session-b',label:'Thursday, November 5, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'}]));
 test('either session can be selected on its own',()=>assert.equal(validateAnswer({...good,availability:['session-b']},sampleSessions).availability[0],'session-b'));
 test('dates are Tuesday and Thursday in Pacific standard time',()=>{for(const [day,weekday] of [['03','Tuesday'],['05','Thursday']]){const date=new Date(`2026-11-${day}T15:30:00-08:00`);assert.equal(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',weekday:'long'}).format(date),weekday);assert.match(new Intl.DateTimeFormat('en-US',{timeZone:'America/Los_Angeles',hour:'numeric',minute:'2-digit',timeZoneName:'shortOffset'}).format(date),/3:30 PM GMT-8/);}});
+test('all four interest levels survive validation',()=>{for(const {id}of interests)assert.equal(validateAnswer({...good,interest:id},sampleSessions).interest,id);});
+test('interest is distinct from experience and beginner branching',()=>assert.equal(validateAnswer({...good,interest:'eager_unsure',experience:'Not yet',tools:['ChatGPT']},sampleSessions).interest,'eager_unsure'));
+test('new empty, unknown and malformed interest values are rejected',()=>{for(const interest of ['',null,4,[],['eager'],'very_interested'])assert.throws(()=>validateAnswer({...good,interest},sampleSessions),/Choose how interested/);});
+test('legacy answers with no interest remain valid and unscored',()=>{const legacy={...good};delete legacy.interest;assert.equal('interest' in validateAnswer(legacy,sampleSessions),false);});
 console.log(`${count} tests passed`);
+
 
