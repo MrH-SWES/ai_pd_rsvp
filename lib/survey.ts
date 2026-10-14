@@ -8,7 +8,7 @@ export const experiences = ['Regularly','A few times','Once or twice','Not yet',
 export type Answer = { experience:string; tools:string[]; uses:string[]; beliefs:string[]; blockers:string[]; example:string; question:string; availability:string[] };
 export const emptyAnswer:Answer={experience:'',tools:[],uses:[],beliefs:[],blockers:[],example:'',question:'',availability:[]};
 export type Session={id:string;label:string;detail:string};
-export const sampleSessions:Session[]=[{id:'sample-a',label:'Tuesday option',detail:'Date and time to be confirmed'}, {id:'sample-b',label:'Thursday option',detail:'Date and time to be confirmed'}];
+export const sampleSessions:Session[]=[{id:'session-a',label:'Tuesday, November 3, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'}, {id:'session-b',label:'Thursday, November 5, 2026',detail:'3:30–4:30 p.m. Pacific (PST)'}];
 export function validateAnswer(v:unknown,sessions:Session[]):Answer {
  if(!v||typeof v!=='object')throw Error('Please review your answers.');
  const a=v as Answer;if(!experiences.includes(a.experience))throw Error('Choose an experience option.');
@@ -19,6 +19,7 @@ export function validateAnswer(v:unknown,sessions:Session[]):Answer {
  if(typeof a.example!=='string'||a.example.length>500||typeof a.question!=='string'||a.question.length>3000)throw Error('Please shorten your written response.');
  const ids=[...sessions.map(s=>s.id),'neither','updates'];
  if(!Array.isArray(a.availability)||!a.availability.length||a.availability.some(x=>!ids.includes(x))||new Set(a.availability).size!==a.availability.length)throw Error('Choose a session or another availability option.');
- if(a.availability.some(x=>['neither','updates'].includes(x))&&a.availability.length>1)throw Error('Choose dates or one other availability option.');
+ if(a.availability.length>1)throw Error('Choose one session or one other availability option.');
  return {experience:a.experience,tools:a.experience==='Not yet'?[]:a.tools,uses:a.experience==='Not yet'?[]:a.uses,beliefs:a.beliefs,blockers:a.blockers,example:a.example.trim(),question:a.question.trim(),availability:a.availability};
 }
+
