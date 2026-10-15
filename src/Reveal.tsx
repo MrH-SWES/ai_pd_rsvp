@@ -2,6 +2,15 @@ import {useEffect, useLayoutEffect, useRef, useState, type RefObject} from 'reac
 import {ArrowRight} from 'lucide-react';
 
 export function cleanName(value:string){return value.trim().replace(/\s+/g,' ').slice(0,60)||'there';}
+// Display-only, optional first name; this is never identity or authorization.
+export function nameFromFragment(hash:string){
+ const params=new URLSearchParams(hash.replace(/^#/, ''));
+ if(params.getAll('name').length!==1)return '';
+ const value=params.get('name');
+ if(!value)return '';
+ const name=value.normalize('NFC').trim();
+ return name.length<=60&&/^[\p{L}\p{M}]+(?:[ ’'−-][\p{L}\p{M}]+)*$/u.test(name)?name:'';
+}
 export function prefersReducedMotion(){return !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;}
 export function useReducedMotion(){
  const [reduced,setReduced]=useState(prefersReducedMotion);
@@ -41,34 +50,36 @@ export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|n
   });
   const cracks=makeCracks();cracks.classList.add('crack-onset');host.append(cracks);
   const timer=setTimeout(onComplete,1320);
-  const resized=()=>{if(Math.abs(window.innerWidth-width)>32)onComplete();};
+  const resized=()=>onComplete();
   window.addEventListener("resize",resized);
   return()=>{clearTimeout(timer);window.removeEventListener("resize",resized);host.replaceChildren();};
  },[]);
  return <div ref={layer} className="shatter-layer" aria-hidden="true" inert />;
 }
-export function Greeting({name,instant,onContinue,onChangeName}:{name:string,instant:boolean,onContinue:()=>void,onChangeName:()=>void}){
+export function Greeting({name,instant,active,onContinue,onChangeName,fromLink=false}:{name:string,instant:boolean,active:boolean,onContinue:()=>void,onChangeName:()=>void,fromLink?:boolean}){
  const greeting=`Hello, ${name}…`,letters=Array.from(greeting);
- const [count,setCount]=useState(()=>instant?letters.length:0);
+ const [count,setCount]=useState(0);
  const heading=useRef<HTMLHeadingElement>(null);
  const complete=instant||count>=letters.length;
- function skipTyping(){setCount(letters.length);heading.current?.focus();}
- useEffect(()=>{heading.current?.focus();},[]);
+ function skipTyping(){setCount(letters.length);heading.current?.focus({preventScroll:true});}
+ useEffect(()=>{setCount(0);},[name]);
  useEffect(()=>{
-  if(complete)return;
+  if(!active||complete)return;
   const previous=letters[count-1];
-  const delay=count===0?300:previous===','?410:previous===' '?110:65+(count%3)*28;
+  const delay=count===0?850:previous===','?360:previous===' '?105:58+(count%3)*28;
   const timer=setTimeout(()=>setCount(n=>n+1),delay);return()=>clearTimeout(timer);
- },[count,complete]);
- useEffect(()=>{if(complete)return;const skip=(e:KeyboardEvent)=>{if(e.key==='Escape')skipTyping();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[complete]);
+ },[count,complete,active,name]);
+ useEffect(()=>{if(!active||complete)return;const skip=(e:KeyboardEvent)=>{if(e.key==='Escape')skipTyping();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[complete,active]);
  return <main className="dark-scene greeting-scene">
-  {!complete&&<button className="skip-animation" onClick={skipTyping}>Skip animation</button>}
+  {active&&!complete&&<button className="skip-animation" onClick={skipTyping}>Skip typing</button>}
   <section className="cinema-copy greeting-copy">
+   <div className={'machine-signature '+(active&&!complete?'is-typing':'')} aria-hidden="true"><span className="robot-head"><i/><i/></span><span className="robot-keys"><i/><i/><i/></span><span>{complete?'READY WHEN YOU ARE':'SOMEONE’S AT THE KEYBOARD'}</span></div>
    <h1 ref={heading} tabIndex={-1} aria-label={greeting} className={'greeting '+(name.length>22?'greeting-long':'')}><span className="greeting-space" aria-hidden="true">{greeting}</span><span className="greeting-typed" aria-hidden="true">{complete?greeting:letters.slice(0,count).join('')}<span className={'typing-caret '+(complete?'finished':'')} /></span></h1>
    <div className={'greeting-controls '+(complete?'ready':'')} aria-hidden={!complete}>
     <button className="primary" disabled={!complete} onClick={onContinue}>Continue <ArrowRight size={20}/></button>
-    <button className="back change-name" disabled={!complete} onClick={onChangeName}>Change my name</button>
+    <button className="back change-name" disabled={!complete} onClick={onChangeName}>{name==='there'?'Add my name':'Change my name'}</button>
    </div>
+   {complete&&fromLink&&<p className="name-source">Your invite link included your first name. It’s only used for this greeting.</p>}
   </section>
  </main>;
 }

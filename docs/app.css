@@ -20,3 +20,58 @@ header{max-width:1320px;margin:auto;display:flex;justify-content:space-between;a
 
 /* One deliberate dictation control for every text-answer field. */
 .dictation{margin:16px 0 0}.dictation-toggle{display:inline-flex;align-items:center;gap:10px;border:1px solid #3a5d88;border-radius:8px;background:#101d30;color:#b9d6fc;padding:11px 16px;min-height:44px;font-size:13px;line-height:1.4}.dictation-toggle:hover:not(:disabled){background:#182c48}.dictation-toggle.is-listening{border-color:#8fb7ef;background:#1d3a62;color:#fff}.dictation-toggle svg{flex-shrink:0}.dictation-info{margin-top:12px;padding:16px 18px;border:1px solid #2a3a51;background:#0f1723;border-radius:9px;max-width:630px}.dictation-info p{font-size:12px;line-height:1.7;margin:0 0 14px;color:#b8c4d6}.dictation-info .secondary{font-size:12px;min-height:44px}.dictation-status{font-size:12px;line-height:1.6;color:#a8b9cf;margin:8px 0 0}.dictation-status:empty{display:none}.dictation-compact .dictation-toggle{background:#f4effb;color:#673ab7;border-color:#cfc0e8;font-size:12px;padding:9px 13px}.dictation-compact .dictation-toggle:hover:not(:disabled){background:#ece3f9}.dictation-compact .dictation-info{background:#f6f2fc;border-color:#d6c9eb}.dictation-compact .dictation-info p,.dictation-compact .dictation-status{color:#554665}.dictation-compact .secondary{color:#673ab7;border-color:#9074ba}.dictation-compact .dictation-toggle.is-listening{background:#673ab7;color:#fff}.form-shard .dictation-info{display:none}
+
+/* The viewport is a camera over one persistent, two-dimensional board. */
+html,body,#root{width:100%;height:100%;overflow:hidden}
+.board-viewport{position:relative;isolation:isolate;width:100%;height:100dvh;overflow:hidden;background:#050608}
+.scene-board{position:relative;width:100%;height:100%;transform:translate3d(calc(var(--camera-x)*-100%),calc(var(--camera-y)*-100%),0);transition:transform 720ms cubic-bezier(.65,0,.22,1);will-change:transform}
+.scene-board.board-instant{transition:none}
+.board-panel{position:absolute;left:calc(var(--scene-x)*100%);top:calc(var(--scene-y)*100%);width:100%;height:100%;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:#050608;scrollbar-color:#27384e #050608}
+.board-panel .dark-scene{min-height:100%;width:100%}
+.board-panel .shell{min-height:100%}
+.board-panel .skip-animation{position:absolute}
+.board-panel .shatter-skip{top:auto;bottom:24px}
+.pan-skip{position:absolute;top:auto;bottom:20px;right:24px;font-size:11px;background:#10151de8}
+.reveal-copy{max-width:940px}
+.reveal-copy h1{font-size:clamp(65px,8vw,118px);letter-spacing:-.055em}
+.reveal-copy .lead{max-width:800px;font-size:clamp(23px,3vw,38px);line-height:1.45;margin:30px 0 40px}
+.name-editor{max-width:720px}
+.name-editor h1{font-size:clamp(38px,5vw,66px);letter-spacing:-.04em}
+.name-editor label{display:block;font-size:13px;color:#abb9cc;margin:32px 0 12px}
+.name-editor input{max-width:560px;font-size:23px;padding:16px 20px}
+.name-source{font-size:11px;line-height:1.7;max-width:480px;color:#8491a3;margin:26px 0 0}
+.machine-signature{display:flex;align-items:center;gap:9px;color:#6e87a7;font-size:9px;letter-spacing:1.5px;margin-bottom:35px;height:28px}
+.robot-head{position:relative;width:25px;height:19px;border:1.5px solid #668bb9;border-radius:5px;display:flex;align-items:center;justify-content:center;gap:5px}
+.robot-head::before{content:'';position:absolute;left:10px;top:-6px;width:2px;height:5px;background:#668bb9}
+.robot-head::after{content:'';position:absolute;width:4px;height:4px;border-radius:50%;left:9px;top:-9px;background:#8fbaff}
+.robot-head i{height:4px;width:3px;background:#9ec5fa;border-radius:2px}
+.robot-keys{display:flex;gap:2px;align-items:flex-end;margin:8px 5px 0 -6px}
+.robot-keys i{width:4px;height:3px;background:#5278a8}
+.is-typing .robot-keys i{animation:robot-key 280ms alternate infinite}
+.is-typing .robot-keys i:nth-child(2){animation-delay:100ms}
+.is-typing .robot-keys i:nth-child(3){animation-delay:190ms}
+.greeting-typed .typing-caret:not(.finished){animation:caret-blink 850ms steps(1) infinite}
+@keyframes robot-key{to{transform:translateY(-4px);background:#9ec5fa}}
+@keyframes caret-blink{50%{opacity:0}}
+/* Deliberately plain and familiar, without claiming this is a Google service. */
+.form-scene{font-family:Arial,Helvetica,sans-serif;min-height:100%;padding:clamp(30px,7vh,65px) 18px 40px;background:#f0ebf8}
+.familiar-topline{font-size:10px;letter-spacing:1.6px;color:#726b7d;margin:0 0 14px 3px}
+.familiar-title{padding-bottom:18px}
+.familiar-title h1{font-family:Arial,Helvetica,sans-serif;font-size:32px}
+.familiar-title p{font-size:14px}
+.familiar-divider{height:1px;background:#dadce0;margin:24px -26px 18px}
+.familiar-title .familiar-required{font-size:12px;color:#a62828}
+.familiar-card label{font-size:16px;margin-bottom:20px}
+.familiar-card label span{color:#b3261e}
+.familiar-card input{font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#5f6368;max-width:310px;cursor:text}
+.familiar-note{font-size:11px}
+.familiar-actions button{font-family:Arial,Helvetica,sans-serif;font-size:14px;min-height:40px}
+.familiar-footnote{font-size:11px;line-height:1.8;max-width:470px;margin:24px auto 0}
+.entry-wrap.revealed>.form-scene{visibility:hidden}
+@media(max-width:760px){.reveal-copy .lead{font-size:25px}.reveal-copy h1{font-size:62px}.board-panel .dark-scene{padding:76px 26px 64px}.machine-signature{font-size:8px;letter-spacing:1px;margin-bottom:30px}.name-source{max-width:310px}.form-scene{padding-top:28px}.familiar-card{padding:24px 22px}.familiar-divider{margin-left:-22px;margin-right:-22px}.familiar-title h1{font-size:30px}.familiar-topline{font-size:9px}.board-panel .shatter-skip{bottom:16px}.greeting{font-size:clamp(55px,12vw,86px)}.greeting-long{font-size:clamp(31px,7vw,48px)}}
+@media(max-height:550px){.board-panel .dark-scene{padding-top:58px;padding-bottom:50px;align-items:flex-start}.greeting{font-size:70px}.machine-signature{margin-bottom:20px}.greeting-controls{margin-top:25px}.form-scene{padding-top:20px}.name-source{margin-top:16px}}
+@media(prefers-reduced-motion:reduce){.scene-board{transition:none!important}.robot-keys i,.typing-caret{animation:none!important}.shattering>.form-scene{visibility:hidden}}
+
+.board-panel .entry-wrap{height:100%;min-height:100%}
+/* Definite viewport height also covers scenes nested inside the survey shell. */
+.board-panel .dark-scene,.board-panel .form-scene{min-height:100dvh}
