@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Save connection check</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    body { margin: 0; padding: 2rem 1.25rem; color: #172327; background: #f6f8f7; }
+    main { max-width: 34rem; margin: 3rem auto; }
+    h1 { font-size: 1.7rem; }
+    p { line-height: 1.6; }
+    button { padding: .85rem 1.1rem; border: 0; border-radius: .5rem; font: inherit; font-weight: 650; color: white; background: #174b3a; cursor: pointer; }
+    button:focus-visible { outline: 3px solid #537bda; outline-offset: 4px; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #result { min-height: 3.2rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Save connection check</h1>
+    <p>This checks whether the response service can be reached without signing in. It does not submit a response.</p>
+    <button id="check" type="button">Check save connection</button>
+    <p id="result" role="status" aria-live="polite"></p>
+  </main>
+  <script>
+    'use strict';
+    const ENDPOINT = 'https://script.google.com/macros/s/AKfycbxkh8w6UPnsoEvkjj-IL6SMToL2B60lGnL1M_1XhzzO3vgayQjVvDt444uHnEEvC_GT/exec?health=1';
+    const MAX_RESPONSE_BYTES = 2048;
+    const button = document.getElementById('check');
+    const result = document.getElementById('result');
+    const safeCategories = new Set(['http-status', 'invalid-response', 'response-too-large', 'invalid-json', 'unexpected-response']);
+
+    function failure(category) {
+      const error = new Error('Connection check failed');
+      error.category = category;
+      return error;
+    }
+
+    async function readHealth(response) {
+      if (!response.ok) throw failure('http-status');
+      if (!response.body) throw failure('invalid-response');
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) break;
+          size += next.value.byteLength;
+          if (size > MAX_RESPONSE_BYTES) {
+            await reader.cancel();
+            throw failure('response-too-large');
+          }
+          chunks.push(next.value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      let health;
+      try { health = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(bytes)); }
+      catch { throw failure('invalid-json'); }
+      if (!health || typeof health !== 'object' || Array.isArray(health) ||
+          Object.keys(health).length !== 3 || health.ok !== true ||
+          health.service !== 'staff-rsvp' || health.protocolVersion !== 2) {
+        throw failure('unexpected-response');
+      }
+    }
+
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      result.textContent = 'Checking connection…';
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      try {
+        const response = await fetch(ENDPOINT, {
+          method: 'GET', mode: 'cors', credentials: 'omit', redirect: 'follow',
+          cache: 'no-store', referrerPolicy: 'no-referrer', signal: controller.signal
+        });
+        await readHealth(response);
+        result.textContent = 'Anonymous connection confirmed';
+      } catch (error) {
+        const category = controller.signal.aborted ? 'timeout' :
+          (safeCategories.has(error && error.category) ? error.category : 'network-or-cors');
+        result.textContent = 'Connection check failed (' + category + ').';
+      } finally {
+        clearTimeout(timeout);
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
