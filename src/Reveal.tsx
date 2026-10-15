@@ -1,5 +1,5 @@
 import {useEffect, useLayoutEffect, useRef, useState, type RefObject} from 'react';
-import {ArrowRight} from 'lucide-react';
+import {TravelArrow} from './Board';
 
 export function cleanName(value:string){return value.trim().replace(/\s+/g,' ').slice(0,60)||'there';}
 // Display-only, optional first name; this is never identity or authorization.
@@ -60,7 +60,7 @@ export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|n
 export function typingDelay(count:number,previous?:string){return count===0?850:previous===','?360:previous===' '?105:58+(count%3)*28;}
 export const GREETING_HOLD_MS=5000;
 export const JOKE_ASIDE_MS=2700;
-export const JOKE_READ_MS=10500;
+export const JOKE_READ_MS=5250;
 export const BLACK_FADE_MS=900;
 
 // Animation clocks count only foreground time. Cleanup cancels both the clock
@@ -78,7 +78,7 @@ export function Joke({active,reduced,onContinue}:{active:boolean,reduced:boolean
  const next=useRef(onContinue);next.current=onContinue;
  useEffect(()=>{if(!active)return;setAside(reduced);setFading(false);if(reduced)return;const a=visibleTimeout(()=>setAside(true),JOKE_ASIDE_MS);const b=visibleTimeout(()=>setFading(true),JOKE_READ_MS);return()=>{a();b();};},[active,reduced]);
  useEffect(()=>{if(!active||!fading||reduced)return;return visibleTimeout(()=>next.current(),BLACK_FADE_MS);},[active,fading,reduced]);
- return <main className={'dark-scene joke-scene '+(fading?'reveal-fading':'')}><section className="cinema-copy reveal-copy"><h1 tabIndex={-1}>Just kidding.</h1><p className="lead">Low-effort, unformatted Google Forms aren’t necessary for this kind of thing anymore.</p><p className={'joke-aside '+(aside?'aside-visible':'')} aria-hidden={!aside}>(And that goes double for SignUpGenius.)</p>{reduced&&<button className="primary" onClick={()=>next.current()}>Continue <ArrowRight size={20}/></button>}</section></main>;
+ return <main className={'dark-scene joke-scene '+(fading?'reveal-fading':'')}><section className="cinema-copy reveal-copy"><h1 tabIndex={-1}>Just kidding.</h1><p className="lead">Low-effort, unformatted Google Forms aren’t necessary for this kind of thing anymore.</p><p className={'joke-aside '+(aside?'aside-visible':'')} aria-hidden={!aside}>(And that goes double for SignUpGenius.)</p>{reduced&&<button className="primary" onClick={()=>next.current()}>Continue <TravelArrow from={-.75} to={-.5} size={20}/></button>}</section></main>;
 }
 export function greetingText(name:string){return name&&name!=='there'?`Wake up, ${name}...`:'Wake up...';}
 export function Greeting({name,instant,reduced,active,onContinue}:{name:string,instant:boolean,reduced:boolean,active:boolean,onContinue:()=>void}){

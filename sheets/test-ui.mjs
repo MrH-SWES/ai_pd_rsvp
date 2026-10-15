@@ -13,13 +13,13 @@ window.top=window;window.parent=window;
 window.fetch=(url,options)=>{requests.push({url,options});submission={data:{payload:JSON.parse(options.body)}};return new Promise(resolve=>{respond=resolve;});};
 const outer={parent:window},bridge={parent:outer,postMessage(data,origin){submission={data,origin};}};
 globalThis.document={hidden:false,addEventListener(){},removeEventListener(){},createElement(){frame={contentWindow:outer,setAttribute(){},addEventListener(){},remove(){}};return frame;},body:{appendChild(){}}};
-globalThis.location={hash:'#name=GreetingOnly'};
+globalThis.location={hash:'#name=GreetingOnly&recipient='+'a'.repeat(32)};
 const {default:Home}=await import('../.sheets-ui-test/Survey.mjs');
 let states=[],refs=[],effects=[],i=0,j=0;
 globalThis.uiHooks={useState(initial){const k=i++;if(!(k in states))states[k]=typeof initial==='function'?initial():initial;return [states[k],v=>{states[k]=typeof v==='function'?v(states[k]):v}];},useRef(initial){const k=j++;return refs[k]??(refs[k]={current:initial});},useEffect(fn,deps){effects.push({fn,deps});}};
 function render(overrides={}){Object.assign(states,overrides);i=0;j=0;effects=[];return Home();}
 function scene(s,overrides={}){return render({0:s,5:false,...overrides}).props.renderScene(s);}
-function reset({keepStorage=false}={}){if(!keepStorage)storageValues.clear();window.sessionStorage=storage;states=[];refs=[];effects=[];listeners.clear();timers.clear();submission=null;respond=null;requests.length=0;frame=null;location.hash='#name=GreetingOnly';}
+function reset({keepStorage=false}={}){if(!keepStorage)storageValues.clear();window.sessionStorage=storage;states=[];refs=[];effects=[];listeners.clear();timers.clear();submission=null;respond=null;requests.length=0;frame=null;location.hash='#name=GreetingOnly&recipient='+'a'.repeat(32);}
 function nodes(n){return n==null||typeof n==='boolean'?[]:Array.isArray(n)?n.flatMap(nodes):typeof n==='object'?[n,...nodes(n.props?.children)]:[n];}
 const text=n=>nodes(n).filter(x=>typeof x==='string').join(' ').replace(/\s+/g,' ');
 const button=(n,label)=>{const result=nodes(n).find(x=>x?.type==='button'&&text(x).trim()===label);assert(result,`button ${label}`);return result;};
@@ -83,4 +83,36 @@ test('UI uses credential-free POST with no hidden iframe or popup dependency',as
 });
 test('mismatched HTTP acknowledgement stays unconfirmed and preserves the exact pending retry',async()=>{
  reset();const saving=button(scene(9,{4:false,1:good,11:'Taylor'}),'Send my response').props.onClick();const original=requests[0].options.body,raw=storageValues.get(PENDING_KEY);ack(true,crypto.randomUUID());await saving;assert.equal(states[9],false);assert.equal(states[12],false);assert.equal(storageValues.get(PENDING_KEY),raw);assert.match(states[6],/couldn’t confirm/);const retry=button(scene(9),'Retry saving').props.onClick();assert.equal(requests[1].options.body,original);ack();await retry;assert.equal(states[9],true);
+});
+
+test('invitation identity uses only opaque recipient ID with no editable email field',async()=>{
+ reset();const review=scene(9,{4:false,1:good,11:'Taylor'});assert.equal(nodes(review).some(n=>n?.props?.id==='response-email'),false);assert.match(text(review),/recipient email associated with your individual invitation link/);
+ const saving=button(review,'Send my response').props.onClick();assert.equal(submission.data.payload.recipientId,'a'.repeat(32));assert.equal(submission.data.payload.responseEmail,undefined);ack();await saving;
+});
+test('new missing, malformed or duplicate recipient links cannot send',async()=>{
+ for(const fragment of ['#name=GreetingOnly','#recipient=bad','#recipient='+'a'.repeat(32)+'&recipient='+'b'.repeat(32)]){
+  reset();location.hash=fragment;await button(scene(9,{4:false,1:good,11:'Taylor'}),'Send my response').props.onClick();assert.equal(requests.length,0);assert.match(states[6],/individual invitation/);
+ }
+});
+test('legacy pending response may retry without a recipient ID',async()=>{
+ reset();location.hash='#name=GreetingOnly';const payload={requestId:crypto.randomUUID(),responseName:'Legacy',answers:good};storageValues.set(PENDING_KEY,JSON.stringify({version:1,endpoint,createdAt:Date.now(),payload}));render();for(const e of effects)e.fn();const saving=button(scene(9),'Retry saving').props.onClick();assert.deepEqual(submission.data.payload,payload);ack();await saving;assert.equal(states[9],true);
+});
+
+test('pending recipient A cannot silently restore under B or a generic link; original link recovers',async()=>{
+ reset();const first=button(scene(9,{4:false,1:good,11:'Taylor'}),'Send my response').props.onClick();const original=storageValues.get(PENDING_KEY);[...timers.values()][0]();await first;
+ for(const hash of ['#recipient='+'b'.repeat(32),'#name=Generic','#recipient=malformed']){
+  reset({keepStorage:true});location.hash=hash;render();for(const e of effects)e.fn();const blocked=render();assert.match(text(blocked),/different invitation/);assert.equal(states[13].blocked,true);assert.equal(states[13].payload,null);assert.equal(requests.length,0);assert.equal(storageValues.get(PENDING_KEY),original);assert.equal(nodes(blocked).some(n=>n?.type==='button'),false);
+ }
+ reset({keepStorage:true});render();for(const e of effects)e.fn();assert.equal(states[13].blocked,false);assert.equal(states[13].payload.recipientId,'a'.repeat(32));const retry=button(scene(9),'Retry saving').props.onClick();assert.deepEqual(submission.data.payload,JSON.parse(original).payload);ack();await retry;assert.equal(states[9],true);
+});
+test('legacy pending envelope cannot silently restore under a new individualized link',()=>{
+ reset();const payload={requestId:crypto.randomUUID(),responseName:'Legacy',answers:good};const raw=JSON.stringify({version:1,endpoint,createdAt:Date.now(),payload});storageValues.set(PENDING_KEY,raw);render();for(const e of effects)e.fn();assert.equal(states[13].blocked,true);assert.equal(states[13].payload,null);assert.match(text(render()),/different invitation/);assert.equal(storageValues.get(PENDING_KEY),raw);assert.equal(requests.length,0);
+});
+
+test('same-document hash navigation cannot retry pending A under B or generic link',async()=>{
+ reset();const first=button(scene(9,{4:false,1:good,11:'Taylor'}),'Send my response').props.onClick();const raw=storageValues.get(PENDING_KEY),payload=JSON.parse(raw).payload;[...timers.values()][0]();await first;assert.equal(requests.length,1);
+ for(const hash of ['#recipient='+'b'.repeat(32),'#name=Generic','#recipient=bad']){
+  location.hash=hash;await button(scene(9),'Retry saving').props.onClick();assert.equal(requests.length,1);assert.match(states[6],/different invitation/);assert.equal(storageValues.get(PENDING_KEY),raw);assert.equal(states[9],false);
+ }
+ location.hash='#recipient='+'a'.repeat(32);const retry=button(scene(9),'Retry saving').props.onClick();assert.equal(requests.length,2);assert.deepEqual(submission.data.payload,payload);ack();await retry;assert.equal(states[9],true);
 });

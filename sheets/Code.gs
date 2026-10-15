@@ -4,6 +4,7 @@
  * Never put a spreadsheet ID, credentials, or response data in the public site.
  * All helpers end in _ so google.script.run cannot invoke them.
  */
+var RSVP_REQUIRE_RECIPIENT_ = true;
 var RSVP_PARENT_ORIGIN_ = 'https://mrh-swes.github.io';
 var RSVP_MAX_INPUT_BYTES_ = 20000;
 var RSVP_LOCK_TIMEOUT_MS_ = 10000;
@@ -14,7 +15,7 @@ var RSVP_REQUEST_ID_ = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-
 var RSVP_HEADERS_ = [
   'received_at_utc', 'request_id', 'payload_sha256', 'response_name',
   'interest', 'experience', 'tools', 'uses', 'beliefs', 'blockers',
-  'example', 'question', 'availability'
+  'example', 'question', 'availability', 'response_email'
 ];
 // Keep these exact approved values in sync with lib/survey.ts.
 var RSVP_OPTIONS_ = {
@@ -31,6 +32,8 @@ var RSVP_OPTIONS_ = {
 var RSVP_ERRORS_ = {
   input: 'Please review your response and try again.',
   size: 'Please shorten your response.',
+  invitation: 'Please open your individual invitation link to send a response.',
+  email: 'Please enter a valid email address for this response.',
   name: 'Please add your name for the response, using 60 characters or fewer.',
   interest: 'Choose how interested you are.',
   experience: 'Choose an experience option.',
@@ -149,6 +152,8 @@ function submitResponse(payload) {
       return {ok: true, requestId: requestId};
     }
 
+    // Old envelopes are accepted only as exact, already-committed retries.
+    if (RSVP_REQUIRE_RECIPIENT_ && !validated.recipientId) fail_('invitation');
     if (lastRow >= RSVP_MAX_RESPONSES_ + 1) fail_('capacity');
     reserveNewAttempt_(properties, Date.now());
     var rowNumber = lastRow + 1;
@@ -194,7 +199,7 @@ function exactKeys_(record, allowed, required) {
 
 function validatePayload_(payload) {
   if (!isRecord_(payload)) fail_('input');
-  exactKeys_(payload, ['requestId', 'responseName', 'answers'], ['requestId', 'responseName', 'answers']);
+  exactKeys_(payload, ['requestId', 'responseName', 'responseEmail', 'recipientId', 'answers'], ['requestId', 'responseName', 'answers']);
   var serialized;
   try { serialized = JSON.stringify(payload); } catch (ignored) { fail_('input'); }
   // Check UTF-8 bytes, not JS code units. Reject before locks or sheet access.
@@ -203,6 +208,16 @@ function validatePayload_(payload) {
   if (typeof payload.responseName !== 'string') fail_('name');
   var name = payload.responseName.trim().replace(/\s+/gu, ' ');
   if (!name || name.length > 60 || /[\u0000-\u001f\u007f]/u.test(payload.responseName) || !/[\p{L}\p{N}]/u.test(name)) fail_('name');
+  var hasEmail = Object.prototype.hasOwnProperty.call(payload, 'responseEmail');
+  var email = hasEmail ? normalizeResponseEmail_(payload.responseEmail) : '';
+  var hasRecipient = Object.prototype.hasOwnProperty.call(payload, 'recipientId');
+  var recipientId = hasRecipient ? payload.recipientId : '';
+  if (hasRecipient) {
+    if (hasEmail || typeof recipientId !== 'string' || !/^[a-f0-9]{32}$/.test(recipientId)) fail_('invitation');
+    var mapped = PropertiesService.getScriptProperties().getProperty('RSVP_RECIPIENT_' + recipientId);
+    if (typeof mapped !== 'string' || !mapped) fail_('invitation');
+    try { email = normalizeResponseEmail_(mapped); } catch (ignored) { fail_('config'); }
+  }
   var answers = payload.answers;
   if (!isRecord_(answers)) fail_('input');
   var required = ['experience', 'tools', 'uses', 'beliefs', 'blockers', 'example', 'question', 'availability'];
@@ -242,7 +257,18 @@ function validatePayload_(payload) {
     example: answers.example.trim(), question: answers.question.trim(),
     availability: answers.availability.slice()
   };
-  return {responseName: name, answers: storedAnswers, fingerprintInput: {version: 1, responseName: payload.responseName, answers: exactAnswers}};
+  var fingerprintInput = {version: 1, responseName: payload.responseName, answers: exactAnswers};
+  // Preserve legacy hashes exactly, including pending retries from the old site.
+  if (hasEmail) { fingerprintInput.version = 2; fingerprintInput.responseEmail = payload.responseEmail; }
+  if (hasRecipient) { fingerprintInput.version = 3; fingerprintInput.recipientId = recipientId; }
+  return {responseName: name, responseEmail: email, recipientId: recipientId, answers: storedAnswers, fingerprintInput: fingerprintInput};
+}
+
+function normalizeResponseEmail_(value) {
+ if(typeof value!=='string')fail_('email');
+ var email=value.trim();
+ if(email.length>254||/[\s\u0000-\u001f\u007f]/u.test(email)||!/^[-A-Za-z0-9.!#$%&'*+\/=?^_`{|}~]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(email)||email.split('@')[0].length>64||email.startsWith('.')||email.includes('..')||email.includes('.@')||email.split('@')[1].split('.').some(label=>label.length>63))fail_('email');
+ return email;
 }
 
 function payloadHash_(value) {
@@ -262,7 +288,7 @@ function makeRow_(timestamp, requestId, fingerprint, validated) {
     answers.interest, answers.experience,
     JSON.stringify(answers.tools), JSON.stringify(answers.uses),
     JSON.stringify(answers.beliefs), JSON.stringify(answers.blockers),
-    answers.example, answers.question, JSON.stringify(answers.availability)
+    answers.example, answers.question, JSON.stringify(answers.availability), validated.responseEmail
   ].map(safeCell_);
 }
 
@@ -270,6 +296,15 @@ function ensureHeaders_(sheet) {
   if (sheet.getLastRow() === 0) {
     if (sheet.getMaxColumns() < RSVP_HEADERS_.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), RSVP_HEADERS_.length - sheet.getMaxColumns());
     sheet.getRange(1, 1, 1, RSVP_HEADERS_.length).setValues([RSVP_HEADERS_.slice()]);
+    SpreadsheetApp.flush();
+  }
+  // Only migrate the exact original 13-column schema; never rewrite responses.
+  if (sheet.getLastColumn() === RSVP_HEADERS_.length - 1) {
+    var legacy = sheet.getRange(1, 1, 1, RSVP_HEADERS_.length - 1);
+    if (legacy.getValues()[0].some(function(value,index){return value !== RSVP_HEADERS_[index];}) ||
+        legacy.getFormulas()[0].some(function(formula){return formula !== '';})) fail_('integrity');
+    if (sheet.getMaxColumns() < RSVP_HEADERS_.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), 1);
+    sheet.getRange(1, RSVP_HEADERS_.length, 1, 1).setValues([['response_email']]);
     SpreadsheetApp.flush();
   }
   if (sheet.getLastColumn() !== RSVP_HEADERS_.length) fail_('integrity');

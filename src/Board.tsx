@@ -1,3 +1,4 @@
+import {ArrowRight} from 'lucide-react';
 import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'react';
 
 // One permanent, top-down storymap. Coordinates belong to the scenes, not to
@@ -10,6 +11,13 @@ export const sceneMap:Record<string,[number,number]>={
 };
 export const boardScenes=[-1,-.75,-.5,0,.1,.2,1,2,3,4,5,6,7,8,9,10,-.25];
 export const boardPosition=(scene:number):[number,number]=>sceneMap[String(scene)]||[0,0];
+/** Direction of camera travel, not the inverse canvas translation. */
+export function travelVector(from:number,to:number){const [ax,ay]=boardPosition(from),[bx,by]=boardPosition(to);return {dx:bx-ax,dy:by-ay};}
+export function TravelArrow({from,to,size=18}:{from:number;to:number;size?:number}){
+ const {dx,dy}=travelVector(from,to);
+ const direction=(dy<0?'up':dy>0?'down':'')+(dx<0?'left':dx>0?'right':'');
+ return <ArrowRight size={size} aria-hidden="true" focusable="false" className="travel-arrow" data-travel-direction={direction} data-travel-from={from} data-travel-to={to} style={{'--travel-dx':dx,'--travel-dy':dy,transform:`rotate(${Math.atan2(dy,dx)*180/Math.PI}deg)`} as CSSProperties}/>;
+}
 export const boardRoutes:[number,number][]=[[-1,-.75],[-.75,-.5],[-.5,0],[0,.1],[0,-.25],[.1,.2],[.2,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]];
 export const PAN_MS=1100;
 export default function Board({active,reduced,renderScene}:{active:number,reduced:boolean,renderScene:(scene:number)=>ReactNode}){

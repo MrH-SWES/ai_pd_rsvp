@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import vm from 'node:vm';
 import {groups, experiences, interests, sampleSessions, emptyAnswer} from '../lib/survey.ts';
-import {normalizeResponseName} from '../lib/sheets.ts';
+import {normalizeResponseName,normalizeResponseEmail} from '../lib/sheets.ts';
 
 const source = await readFile(new URL('./Code.gs', import.meta.url), 'utf8');
 const copy = value => JSON.parse(JSON.stringify(value));
@@ -89,6 +89,7 @@ function harness(options={}) {
   HtmlService:{XFrameOptionsMode:{ALLOWALL:'ALLOWALL'},createHtmlOutput(html){calls.push(['inert',html]);return{html};},createTemplateFromFile(file){assert.equal(file,'Bridge');const template={evaluate(){calls.push(['template',copy({parentOriginJson:template.parentOriginJson,channelNonceJson:template.channelNonceJson})]);return{setXFrameOptionsMode(mode){assert.equal(mode,'ALLOWALL');return{mode,template};}};}};return template;}}
  });
  vm.runInContext(source,context,{filename:'Code.gs'});
+ context.RSVP_REQUIRE_RECIPIENT_ = options.requireRecipient ?? false;
  return{context,state,properties,calls,sheets,submit(payload){return copy(context.submitResponse(payload));},rows(name='Responses'){return sheets.get(name)?.rows??[];},headers(){return copy(context.RSVP_HEADERS_);}};
 }
 function saved(result,n=1){assert.deepEqual(result,{ok:true,requestId:id(n)});}
@@ -104,7 +105,7 @@ test('all approved survey options exactly match the baseline',()=>{
 });
 test('append includes UTC timestamp, request ID, server hash, name and every answer',()=>{
  const h=harness();const p=valid();p.answers.tools=['ChatGPT','Claude'];p.answers.uses=['Emails & writing'];p.answers.beliefs=['A useful thinking partner'];p.answers.blockers=['Student privacy'];p.answers.example='  Rewriting  ';p.answers.question='  Can it help?  ';
- saved(h.submit(p));const row=h.rows()[1];assert.deepEqual(h.rows()[0],h.headers());assert.equal(row.length,13);assert.equal(row[0],'2026-10-15T04:00:00.000Z');assert.equal(row[1],id(1));assert.match(row[2],/^[a-f0-9]{64}$/);assert.deepEqual(row.slice(3),['Avery 教师','interested','Regularly','["ChatGPT","Claude"]','["Emails & writing"]','["A useful thinking partner"]','["Student privacy"]','Rewriting','Can it help?','["session-a"]']);
+ saved(h.submit(p));const row=h.rows()[1];assert.deepEqual(h.rows()[0],h.headers());assert.equal(row.length,14);assert.equal(row[0],'2026-10-15T04:00:00.000Z');assert.equal(row[1],id(1));assert.match(row[2],/^[a-f0-9]{64}$/);assert.deepEqual(row.slice(3),['Avery 教师','interested','Regularly','["ChatGPT","Claude"]','["Emails & writing"]','["A useful thinking partner"]','["Student privacy"]','Rewriting','Can it help?','["session-a"]','']);
  assert.equal(h.state.locked,false);const write=h.calls.findLastIndex(x=>x[0]==='write');const flush=h.calls.findLastIndex(x=>x[0]==='flush');const verify=h.calls.findLastIndex(x=>x[0]==='read');const release=h.calls.findLastIndex(x=>x[0]==='release');assert(write<flush&&flush<verify&&verify<release);
 });
 test('new request ID appends another response even with identical answers',()=>{const h=harness();saved(h.submit(valid()));saved(h.submit(valid(2)),2);assert.equal(h.rows().length,3);});
@@ -232,3 +233,28 @@ for(const [label,event] of [
 test('POST retains UTF-8 name and written-text limits at the accepted maximum',()=>{const h=harness(),p=valid();p.answers.example='字'.repeat(500);p.answers.question='語'.repeat(3000);saved(postResult(h,postEvent(p)));});
 
 console.log(`\n${count} Apps Script backend tests passed. No external services were contacted.`);
+
+test('email is validated, appended, deduplicated and included in payload hash',()=>{
+ const h=harness();const p={...valid(),responseEmail:' Taylor.Smith+pd@example.org '};saved(h.submit(p));assert.equal(h.rows()[1][13],'Taylor.Smith+pd@example.org');saved(h.submit(p));assert.equal(h.rows().length,2);rejected(h.submit({...p,responseEmail:'other@example.org'}),/different answers/);
+ for(const responseEmail of ['',null,12,'missing-at','a@b','a..b@example.org','.a@example.org','a.@example.org','a@-bad.org','a@bad-.org','a@exam ple.org','a@example.org\nBCC:x@y.org','a'.repeat(65)+'@example.org'])rejected(h.submit({...valid(2),responseEmail}),/valid email/);
+});
+test('exact legacy headers migrate by appending only; old hashes and retries remain valid',()=>{
+ const original=harness();const p=valid();saved(original.submit(p));const rows=original.rows().map(row=>row.slice(0,13));const before=copy(rows);const h=harness({rows,maxColumns:13});saved(h.submit(p));assert.equal(h.rows().length,2);assert.equal(h.rows()[0][13],'response_email');assert.deepEqual(h.rows()[1],before[1]);assert.deepEqual(h.rows()[0].slice(0,13),before[0]);
+ saved(h.submit({...valid(2),responseEmail:'new@example.org'}),2);assert.equal(h.rows()[2][13],'new@example.org');
+});
+
+test('client/server email validation agrees and literal formula-like local parts stay safe',()=>{
+ for(const responseEmail of ['name@example.org',' First.Last+pd@example.org ', '=name@example.org', '+tag@example.org', "o'neil@example.org", 'x@sub.example.org', 'a..b@example.org', 'a@b', 'x@'+'a'.repeat(64)+'.org', 'x\n@example.org']){
+  const h=harness();let normalized;try{normalized=normalizeResponseEmail(responseEmail);}catch{rejected(h.submit({...valid(),responseEmail}),/valid email/);continue;}
+  saved(h.submit({...valid(),responseEmail}));assert.equal(h.rows()[1][13],normalized);
+ }
+});
+
+test('new submissions require mapped invitation IDs; exact old committed retries survive cutover',()=>{
+ const h=harness();const legacy=valid();saved(h.submit(legacy));h.context.RSVP_REQUIRE_RECIPIENT_=true;saved(h.submit(legacy));rejected(h.submit(valid(2)),/individual invitation/);assert.equal(h.rows().length,2);
+ const token='a'.repeat(32);h.properties.set('RSVP_RECIPIENT_'+token,'invitee@example.org');const payload={...valid(3),recipientId:token};saved(h.submit(payload),3);assert.equal(h.rows()[2][13],'invitee@example.org');saved(h.submit(payload),3);assert.equal(h.rows().length,3);
+ rejected(h.submit({...valid(4),recipientId:'b'.repeat(32)}),/individual invitation/);rejected(h.submit({...valid(4),recipientId:token,responseEmail:'forged@example.org'}),/individual invitation/);rejected(h.submit({...valid(4),recipientId:'bad'}),/individual invitation/);assert.equal(h.rows().length,3);
+});
+test('new email-only submissions are rejected; committed v3 email envelopes still retry safely',()=>{
+ const h=harness();const payload={...valid(),responseEmail:'prior@example.org'};saved(h.submit(payload));h.context.RSVP_REQUIRE_RECIPIENT_=true;saved(h.submit(payload));rejected(h.submit({...valid(2),responseEmail:'new@example.org'}),/individual invitation/);assert.equal(h.rows().length,2);
+});

@@ -6,7 +6,7 @@ export const PENDING_TTL_MS=24*60*60*1000;
 export type PendingRestore={payload:Submission|null;notice:string;storageAvailable:boolean;blocked:boolean};
 type StorageHost={sessionStorage:Pick<Storage,'getItem'|'setItem'|'removeItem'>};
 function storage(host:StorageHost){return host.sessionStorage;}
-export function loadPending(endpoint:string,host:StorageHost=window,now=Date.now()):PendingRestore {
+export function loadPending(endpoint:string,host:StorageHost=window,now=Date.now(),currentRecipientId?:string):PendingRestore {
  let s:StorageHost['sessionStorage'],raw:string|null;
  try {s=storage(host);raw=s.getItem(PENDING_KEY);}catch{
   return {payload:null,notice:'Recovery could not be checked in this browser. If you already tried sending a response, keep the original tab open and contact the organizer before starting another. Keep this page open while saving.',storageAvailable:false,blocked:false};
@@ -19,6 +19,7 @@ export function loadPending(endpoint:string,host:StorageHost=window,now=Date.now
    Object.keys(saved).sort().join(',')!=='createdAt,endpoint,payload,version'||saved.version!==1||
    saved.endpoint!==validEndpoint(endpoint)||!saved.endpoint||!Number.isSafeInteger(saved.createdAt)||
    saved.createdAt>now||now-saved.createdAt>PENDING_TTL_MS||!validSubmission(saved.payload))throw Error('Invalid stored envelope');
+  if(currentRecipientId!==undefined&&(saved.payload.recipientId||'')!==currentRecipientId)return {payload:null,notice:'This tab has an unconfirmed response from a different invitation. Its saved copy has been kept. Reopen the original individual invitation in this same tab to retry, or contact the organizer. This link has not sent a new response.',storageAvailable:true,blocked:true};
   return {payload:saved.payload,notice:'Your pending response was restored in this tab. Its save is still unconfirmed. Retry with the same answers.',storageAvailable:true,blocked:false};
  } catch {
   return {payload:null,notice:'This tab has an unconfirmed response that cannot be safely restored. Its stored copy has been kept. Keep this tab open and contact the organizer before submitting another response.',storageAvailable:true,blocked:true};

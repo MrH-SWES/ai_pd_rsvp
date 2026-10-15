@@ -3,7 +3,7 @@ import {validateAnswer,sampleSessions,type Answer} from './survey.ts';
 export const PARENT_ORIGIN='https://mrh-swes.github.io';
 export const BRIDGE_VERSION=1;
 export const MAX_ENVELOPE_BYTES=20000;
-export type Submission={requestId:string;responseName:string;answers:Answer};
+export type Submission={requestId:string;responseName:string;responseEmail?:string;recipientId?:string;answers:Answer};
 export type SaveAck={ok:true;requestId:string};
 export function validEndpoint(value:unknown):string {
  if(typeof value!=='string'||!value)return '';
@@ -17,20 +17,33 @@ export function normalizeResponseName(value:string):string {
  if(!name||name.length>60||/[\u0000-\u001f\u007f]/u.test(value)||!/[\p{L}\p{N}]/u.test(name))throw Error('Please add your name for the response, using 60 characters or fewer.');
  return name;
 }
+/** Basic address syntax only; ownership is self-reported, never verified. */
+export function normalizeResponseEmail(value:string):string {
+ const email=value.trim();
+ if(email.length>254||/[\s\u0000-\u001f\u007f]/u.test(email)||!/^[-A-Za-z0-9.!#$%&'*+\/=?^_`{|}~]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)+$/.test(email)||email.split('@')[0].length>64||email.startsWith('.')||email.includes('..')||email.includes('.@')||email.split('@')[1].split('.').some(label=>label.length>63))throw Error('Please enter a valid email address for this response.');
+ return email;
+}
+export function recipientIdFromFragment(fragment:string):string {
+ const values=new URLSearchParams(fragment.replace(/^#/, '')).getAll('recipient');
+ return values.length===1&&/^[a-f0-9]{32}$/.test(values[0])?values[0]:'';
+}
 export function randomHex(bytes=16):string {
  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)),n=>n.toString(16).padStart(2,'0')).join('');
 }
-export function createSubmission(responseName:string,answers:Answer):Submission {
- return {requestId:crypto.randomUUID(),responseName:normalizeResponseName(responseName),answers:JSON.parse(JSON.stringify(answers))};
+export function createSubmission(responseName:string,answers:Answer,responseEmail?:string,recipientId?:string):Submission {
+ if(recipientId!==undefined&&(!/^[a-f0-9]{32}$/.test(recipientId)||responseEmail!==undefined))throw Error('Please open your individual invitation link to send a response.');
+ return {requestId:crypto.randomUUID(),responseName:normalizeResponseName(responseName),...(recipientId===undefined?{}:{recipientId}),...(responseEmail===undefined?{}:{responseEmail:normalizeResponseEmail(responseEmail)}),answers:JSON.parse(JSON.stringify(answers))};
 }
 export function validSubmission(value:unknown):value is Submission {
  try {
   if(!value||typeof value!=='object'||Array.isArray(value))return false;
   const p=value as Submission;
-  if(Object.keys(p).sort().join(',')!=='answers,requestId,responseName'||
+  if(!['answers,requestId,responseName','answers,requestId,responseEmail,responseName','answers,recipientId,requestId,responseName'].includes(Object.keys(p).sort().join(','))||
    typeof p.requestId!=='string'||!(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/).test(p.requestId)||
    typeof p.responseName!=='string'||!p.answers||typeof p.answers!=='object'||Array.isArray(p.answers))return false;
   normalizeResponseName(p.responseName);
+  if(Object.prototype.hasOwnProperty.call(p,'recipientId')&&(typeof p.recipientId!=='string'||!/^[a-f0-9]{32}$/.test(p.recipientId)))return false;
+  if(Object.prototype.hasOwnProperty.call(p,'responseEmail')){if(typeof p.responseEmail!=='string')return false;normalizeResponseEmail(p.responseEmail);}
   const required=['experience','tools','uses','beliefs','blockers','example','question','availability'];
   if(Object.keys(p.answers).some(k=>!required.includes(k)&&k!=='interest')||required.some(k=>!Object.prototype.hasOwnProperty.call(p.answers,k)))return false;
   for(const k of ['tools','uses','beliefs','blockers','availability'] as const)if(!Array.isArray(p.answers[k])||Object.keys(p.answers[k]).length!==p.answers[k].length)return false;

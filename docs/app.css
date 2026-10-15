@@ -149,3 +149,6 @@ header{padding:22px max(32px,5vw);border:0;max-width:none;opacity:.7}
 
 /* A response identity field lives only in review, never in the cinematic opener. */
 .response-name{margin:24px 0 30px;padding-bottom:22px;border-bottom:1px solid var(--line)}.response-name label{display:block;font-size:15px;font-weight:600;margin-bottom:12px}.response-name input{display:block;width:100%;max-width:520px;background:#0d1118;border:1px solid #3a4658;border-radius:8px;color:var(--ink);font:inherit;padding:14px 16px;min-height:50px}.response-name input:disabled{opacity:.7}.response-name .small{max-width:650px}
+
+/* Match the camera vector using actual viewport pitches, including diagonal skips. */
+@supports (transform:rotate(atan2(1px,1px))){.travel-arrow{transform:rotate(atan2(calc(var(--travel-dy)*var(--pitch-y,112dvh)),calc(var(--travel-dx)*var(--pitch-x,112vw))))!important}}
