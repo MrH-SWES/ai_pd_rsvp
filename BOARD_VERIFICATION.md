@@ -1,5 +1,7 @@
 # Storymap and terminal reveal
 
+Sheets integration note: the baseline UI remains intact. Current backend and review-only name changes are documented in `SHEETS_INTEGRATION.md`.
+
 Updated October 15, 2026.
 
 ## Experience
@@ -20,7 +22,7 @@ The terminal uses the original, unmodified Liberation Mono Regular TTF under SIL
 
 The optional `#name=FirstName` fragment is display-only, never authentication. It accepts bounded Unicode letters/marks, spaces, apostrophes, and hyphens, and rejects duplicate/malformed values. It is rendered as text and is not sent in API requests. No staff roster or recipient emails are embedded. A separate future `#invite=` flow is unchanged.
 
-The terminal contains no name-source disclaimer or other visible text. The review retains truthful name, preview, and dictation disclosures. The obsolete full-screen name editor, its review link, board slot, and unused state/styles have been removed. The display-only personalized and generic terminal greetings are unchanged. `docs/config.js` still has an empty API base. Finishing the preview explicitly confirms no response was submitted or saved. This release does not activate response collection or change the backend.
+The terminal contains no name-source disclaimer or other visible text. The review retains truthful name, preview, and dictation disclosures. The obsolete full-screen name editor, its review link, board slot, and unused state/styles have been removed. The display-only personalized and generic terminal greetings are unchanged. `docs/config.js` still has an empty API base. Finishing the preview explicitly confirms no response was submitted or saved. The authorized Sheets integration now configures its production endpoint; the review-only response name and save state are enabled. A real browser-to-private-Sheet round trip remains required before reporting collection as operational.
 
 ## Automated checks
 - 28 UI/component/timing/storymap checks, including panel absence and forward/back/review navigation

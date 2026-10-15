@@ -5,3 +5,9 @@ node_modules/
 .wrangler/
 .env*
 *.sqlite*
+
+# Local verification artifacts
+.test/
+.speech-test/
+.sheets-ui-test/
+SOURCE_PROVENANCE.json

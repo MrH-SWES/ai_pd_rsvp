@@ -1,0 +1,35 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>Response bridge</title></head><body>
+<script>
+(function(){
+ 'use strict';
+ const parentOrigin=<?!= parentOriginJson ?>;
+ const channelNonce=<?!= channelNonceJson ?>;
+ const version=1;
+ if(parentOrigin!=='https://mrh-swes.github.io'||!/^[a-f0-9]{32}$/.test(channelNonce)||window.top===window)return;
+ let busy=false,stopped=false;
+ const send=message=>window.top.postMessage(Object.assign({version,channelNonce},message),parentOrigin);
+ const ready=()=>{if(!stopped)send({type:'pd-rsvp-ready'});};
+ const readyTimer=setInterval(ready,1000);
+ const expire=setTimeout(()=>{stopped=true;clearInterval(readyTimer);window.removeEventListener('message',receive);},120000);
+ function acknowledge(requestId,ok,error){send({type:'pd-rsvp-ack',requestId,ok,...(error?{error}:{})});}
+ function receive(event){
+  const data=event.data;
+  if(stopped||busy||event.origin!==parentOrigin||event.source!==window.top||!data||typeof data!=='object'||data.type!=='pd-rsvp-submit'||data.version!==version||data.channelNonce!==channelNonce)return;
+  const payload=data.payload;
+  if(!payload||typeof payload!=='object'||typeof payload.requestId!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(payload.requestId))return;
+  let size;try{size=new TextEncoder().encode(JSON.stringify(payload)).length;}catch{return;}
+  if(size>20000){acknowledge(payload.requestId,false,'Please shorten your response.');return;}
+  busy=true;stopped=true;clearInterval(readyTimer);clearTimeout(expire);window.removeEventListener('message',receive);
+  const failure=()=>acknowledge(payload.requestId,false,'We couldn’t confirm that your response was saved. Please retry safely from the survey.');
+  try{
+   google.script.run.withSuccessHandler(result=>{
+    if(!result||typeof result!=='object'||result.requestId!==payload.requestId||typeof result.ok!=='boolean'){failure();return;}
+    acknowledge(result.requestId,result.ok,result.ok?undefined:typeof result.error==='string'&&result.error.length<=250?result.error:'Your response wasn’t confirmed. Please retry.');
+   }).withFailureHandler(failure).submitResponse(payload);
+  }catch{failure();}
+ }
+ window.addEventListener('message',receive);ready();
+})();
+</script>
+</body></html>
