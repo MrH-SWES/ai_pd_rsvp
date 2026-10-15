@@ -3,12 +3,12 @@ import {useEffect, useRef, useState, type CSSProperties, type ReactNode} from 'r
 // One permanent, top-down storymap. Coordinates belong to the scenes, not to
 // the navigation order. In particular Yes travels east and No travels south.
 export const sceneMap:Record<string,[number,number]>={
- '-1':[0,0], '-0.75':[1,0], '-0.5':[2,0], '-0.4':[2,-1],
+ '-1':[0,0], '-0.75':[1,0], '-0.5':[2,0],
  '0':[3,0], '-0.25':[3,1], '0.1':[4,0], '0.2':[5,0],
  '1':[6,0], '2':[6,1], '3':[5,1], '4':[4,1], '5':[4,2],
  '6':[5,2], '7':[6,2], '8':[6,3], '9':[5,3], '10':[4,3],
 };
-export const boardScenes=[-1,-.75,-.5,0,.1,.2,1,2,3,4,5,6,7,8,9,10,-.25,-.4];
+export const boardScenes=[-1,-.75,-.5,0,.1,.2,1,2,3,4,5,6,7,8,9,10,-.25];
 export const boardPosition=(scene:number):[number,number]=>sceneMap[String(scene)]||[0,0];
 export const boardRoutes:[number,number][]=[[-1,-.75],[-.75,-.5],[-.5,0],[0,.1],[0,-.25],[.1,.2],[.2,1],[1,2],[2,3],[3,4],[4,5],[5,6],[6,7],[7,8],[8,9],[9,10]];
 export const PAN_MS=1100;
