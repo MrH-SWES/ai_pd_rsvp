@@ -56,30 +56,45 @@ export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|n
  },[]);
  return <div ref={layer} className="shatter-layer" aria-hidden="true" inert />;
 }
-export function Greeting({name,instant,active,onContinue,onChangeName,fromLink=false}:{name:string,instant:boolean,active:boolean,onContinue:()=>void,onChangeName:()=>void,fromLink?:boolean}){
- const greeting=`Hello, ${name}…`,letters=Array.from(greeting);
+// Match the existing cadence exactly, including the opening pause and comma beat.
+export function typingDelay(count:number,previous?:string){return count===0?850:previous===','?360:previous===' '?105:58+(count%3)*28;}
+export const GREETING_HOLD_MS=5000;
+export const JOKE_ASIDE_MS=2700;
+export const JOKE_READ_MS=10500;
+export const BLACK_FADE_MS=900;
+
+// Animation clocks count only foreground time. Cleanup cancels both the clock
+// and visibility listener; a hidden tab cannot type or advance in the background.
+export function visibleTimeout(callback:()=>void,delay:number){
+ let timer:ReturnType<typeof setTimeout>|null=null,remaining=delay,started=0,cancelled=false;
+ function pause(){if(timer!==null){clearTimeout(timer);timer=null;remaining=Math.max(0,remaining-(performance.now()-started));}}
+ function resume(){if(cancelled||document.hidden||timer!==null)return;started=performance.now();timer=setTimeout(()=>{timer=null;if(document.hidden){remaining=0;return;}cancelled=true;document.removeEventListener('visibilitychange',visibility);callback();},remaining);}
+ function visibility(){if(document.hidden)pause();else resume();}
+ document.addEventListener('visibilitychange',visibility);resume();
+ return()=>{cancelled=true;pause();document.removeEventListener('visibilitychange',visibility);};
+}
+export function Joke({active,reduced,onContinue}:{active:boolean,reduced:boolean,onContinue:()=>void}){
+ const [aside,setAside]=useState(false),[fading,setFading]=useState(false);
+ const next=useRef(onContinue);next.current=onContinue;
+ useEffect(()=>{if(!active)return;setAside(reduced);setFading(false);if(reduced)return;const a=visibleTimeout(()=>setAside(true),JOKE_ASIDE_MS);const b=visibleTimeout(()=>setFading(true),JOKE_READ_MS);return()=>{a();b();};},[active,reduced]);
+ useEffect(()=>{if(!active||!fading||reduced)return;return visibleTimeout(()=>next.current(),BLACK_FADE_MS);},[active,fading,reduced]);
+ return <main className={'dark-scene joke-scene '+(fading?'reveal-fading':'')}><section className="cinema-copy reveal-copy"><h1 tabIndex={-1}>Just kidding.</h1><p className="lead">Low-effort, unformatted Google Forms aren’t necessary for this kind of thing anymore.</p><p className={'joke-aside '+(aside?'aside-visible':'')} aria-hidden={!aside}>(And that goes double for SignUpGenius.)</p>{reduced&&<button className="primary" onClick={()=>next.current()}>Continue <ArrowRight size={20}/></button>}</section></main>;
+}
+export function greetingText(name:string){return name&&name!=='there'?`Wake up, ${name}...`:'Wake up...';}
+export function Greeting({name,instant,reduced,active,onContinue}:{name:string,instant:boolean,reduced:boolean,active:boolean,onContinue:()=>void}){
+ const greeting=greetingText(name),letters=Array.from(greeting);
  const [count,setCount]=useState(0);
- const heading=useRef<HTMLHeadingElement>(null);
+ const next=useRef(onContinue),advanced=useRef(false);next.current=onContinue;
  const complete=instant||count>=letters.length;
- function skipTyping(){setCount(letters.length);heading.current?.focus({preventScroll:true});}
+ function advance(){if(!active||!complete||document.hidden||advanced.current)return;advanced.current=true;next.current();}
  useEffect(()=>{setCount(0);},[name]);
+ useEffect(()=>{if(active)advanced.current=false;},[active]);
  useEffect(()=>{
   if(!active||complete)return;
-  const previous=letters[count-1];
-  const delay=count===0?850:previous===','?360:previous===' '?105:58+(count%3)*28;
-  const timer=setTimeout(()=>setCount(n=>n+1),delay);return()=>clearTimeout(timer);
+  return visibleTimeout(()=>setCount(n=>n+1),typingDelay(count,letters[count-1]));
  },[count,complete,active,name]);
- useEffect(()=>{if(!active||complete)return;const skip=(e:KeyboardEvent)=>{if(e.key==='Escape')skipTyping();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[complete,active]);
- return <main className="dark-scene greeting-scene">
-  {active&&!complete&&<button className="skip-animation" onClick={skipTyping}>Skip typing</button>}
-  <section className="cinema-copy greeting-copy">
-   <div className={'machine-signature '+(active&&!complete?'is-typing':'')} aria-hidden="true"><span className="robot-head"><i/><i/></span><span className="robot-keys"><i/><i/><i/></span><span>{complete?'READY WHEN YOU ARE':'SOMEONE’S AT THE KEYBOARD'}</span></div>
-   <h1 ref={heading} tabIndex={-1} aria-label={greeting} className={'greeting '+(name.length>22?'greeting-long':'')}><span className="greeting-space" aria-hidden="true">{greeting}</span><span className="greeting-typed" aria-hidden="true">{complete?greeting:letters.slice(0,count).join('')}<span className={'typing-caret '+(complete?'finished':'')} /></span></h1>
-   <div className={'greeting-controls '+(complete?'ready':'')} aria-hidden={!complete}>
-    <button className="primary" disabled={!complete} onClick={onContinue}>Continue <ArrowRight size={20}/></button>
-    <button className="back change-name" disabled={!complete} onClick={onChangeName}>{name==='there'?'Add my name':'Change my name'}</button>
-   </div>
-   {complete&&fromLink&&<p className="name-source">Your invite link included your first name. It’s only used for this greeting.</p>}
-  </section>
+ useEffect(()=>{if(!active||!complete||reduced)return;return visibleTimeout(advance,GREETING_HOLD_MS);},[active,complete,reduced,name]);
+ return <main className="dark-scene greeting-scene" role={complete?'button':undefined} tabIndex={active&&complete?0:-1} aria-label={complete?greeting+' Continue invitation.':undefined} onClick={advance} onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();advance();}}}>
+  <h1 tabIndex={-1} aria-label={greeting+(complete?' Press Enter to continue.':'')} className={'greeting '+(name.length>22?'greeting-long':'')}><span className="greeting-space" aria-hidden="true">{greeting}</span><span className="greeting-typed" aria-hidden="true">{complete?greeting:letters.slice(0,count).join('')}<span className={'typing-caret '+(complete?'finished':'')} /></span></h1>
  </main>;
 }

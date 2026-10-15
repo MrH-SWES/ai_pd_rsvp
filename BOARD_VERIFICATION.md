@@ -1,28 +1,32 @@
-# Board navigation and reveal
+# Storymap and terminal reveal
 
 Updated October 15, 2026.
 
-## Behavior
-- The plain decoy never displays a personalized name. Focusing/clicking its name field starts the shatter, and keyboard/form submission also works.
-- The next scene is “Just kidding.” with the requested Google Forms copy. Continuing reveals a character-by-character greeting with a small typing robot.
-- Scenes have stable coordinates on one persistent two-dimensional board. The viewport pans by transforming the board. Each scene scrolls independently; offscreen scenes are inert and aria-hidden.
-- Reduced-motion preferences bypass shattering, typing, and camera movement. Skip controls and Escape finish active animation. Focus moves to the destination heading without scrolling the page.
-- The “No” branch exits to a thank-you screen. Interest and experience remain separate questions. First-time users skip tool/use questions.
-- Both identical sessions remain November 3 and November 5, 2026, 3:30–4:30 p.m. Pacific (PST). Only one session can be selected.
-- Every editable response field has dictation, an explicit browser speech-service disclosure, and keyboard fallback. Leaving a scene cancels its dictation session.
+## Experience
+- Focusing the plain fake form’s name field starts twenty real polygon fragments.
+- “Just kidding.” retains the Google Forms copy. The SignUpGenius aside fades in after 2.7 foreground seconds. The main message gets 10.5 foreground seconds before a 900 ms fade to black.
+- The terminal displays only green `Wake up, FirstName...` text on solid black. A generic link displays `Wake up...`.
+- Per-character typing is unchanged: 850 ms initial pause, 360 ms after commas, 105 ms after spaces, otherwise 58 + (character count modulo 3) × 28 ms. The caret blinks after completion.
+- Click, tap, Enter, or Space advances only after typing is complete. Automatic advance waits five foreground seconds after the last character. All reveal clocks pause while the tab is hidden.
+- Reduced motion bypasses shatter, pan, typing, and fade. The joke has a Continue button; the terminal is keyboard-focusable and manually advanced, with no automatic advance.
+- A permanent top-down two-dimensional storymap holds every scene. The camera translates over one dotted surface with route hairlines, shared registration marks, and visible gaps between panels. Panels do not crossfade. Yes moves east; No moves south. The remainder winds around the same surface.
+- Only the active panel is accessible and interactive. Scene changes reset its scroll and focus the destination heading. Escape/Skip movement finishes a pan.
+- The No branch ends politely without submitting. Interest and experience remain separate; first-time users skip tools/use questions.
+- Session options remain November 3 and November 5, 2026, 3:30–4:30 p.m. Pacific (PST), one session maximum.
+- Every actual editable text field keeps dictation, its speech-service disclosure, and keyboard fallback. Leaving a field’s scene cancels dictation.
 
-## Personalization and preview
-An optional `#name=FirstName` fragment is display-only. It is not authentication or a saved RSVP. Only Unicode letters/marks, spaces, apostrophes, and hyphens are accepted, with a 60-character maximum; duplicate name parameters and malformed names fall back to a generic greeting. Names render as React text. No roster or recipient email is included in the site.
+## Fonts, personalization, and privacy
+The terminal uses the original, unmodified Liberation Mono Regular TTF under SIL Open Font License 1.1, bundled with its copyright/license. This is a legally licensed terminal-style choice, not a claim to the exact font from the film. Lexend remains on the rest of the custom experience; the deliberately familiar fake-form opener retains its plain form styling.
 
-A small note after the greeting explains that the invite link included the first name. Visitors can change their greeting. Fragment names are not sent in API requests. The separate future `#invite=` flow uses a server-resolved name.
+The optional `#name=FirstName` fragment is display-only, never authentication. It accepts bounded Unicode letters/marks, spaces, apostrophes, and hyphens, and rejects duplicate/malformed values. It is rendered as text and is not sent in API requests. No staff roster or recipient emails are embedded. A separate future `#invite=` flow is unchanged.
 
-`docs/config.js` still has an empty API base. Preview completion explicitly says no response was submitted or saved. Live collection has not been deployed by this frontend update.
+The terminal contains no name-source disclaimer or other visible text. The review retains truthful name, preview, and dictation disclosures. The name editor remains available through “Change my greeting” in review. `docs/config.js` still has an empty API base. Finishing the preview explicitly confirms no response was submitted or saved. This release does not activate response collection or change the backend.
 
-## Checks
+## Automated checks
+- 25 UI/component/timing/storymap checks
 - 22 survey validation tests
-- 17 component/board/reveal checks
-- 16 dictation tests, including stale-callback cancellation and field targeting
-- 12 backend regression tests (no backend changes)
-- TypeScript check and production bundle
+- 16 dictation tests
+- 12 unchanged backend regression tests
+- TypeScript no-emit check and production bundle
 
-These are deterministic source/component tests, not a substitute for a real microphone or browser end-to-end test. Browser smoke-test results are recorded separately after deployment.
+Local headless Chromium could not launch in the execution sandbox. Actual browser smoke-test results and screenshots are recorded separately after deployment. Physical mobile and real-microphone testing are not claimed.
