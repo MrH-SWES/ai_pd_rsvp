@@ -85,6 +85,7 @@ function harness(options={}) {
    newBlob(text){return{getBytes(){return [...Buffer.from(text,'utf8')];}};},
    computeDigest(algorithm,text,charset){assert.equal(algorithm,'SHA_256');assert.equal(charset,'UTF_8');return [...createHash('sha256').update(text,'utf8').digest()].map(byte=>byte>127?byte-256:byte);}
   },
+  ContentService:{MimeType:{JSON:'application/json'},createTextOutput(text){calls.push(['json',text]);return{text,setMimeType(type){assert.equal(type,'application/json');return{text,mimeType:type};}};}},
   HtmlService:{XFrameOptionsMode:{ALLOWALL:'ALLOWALL'},createHtmlOutput(html){calls.push(['inert',html]);return{html};},createTemplateFromFile(file){assert.equal(file,'Bridge');const template={evaluate(){calls.push(['template',copy({parentOriginJson:template.parentOriginJson,channelNonceJson:template.channelNonceJson})]);return{setXFrameOptionsMode(mode){assert.equal(mode,'ALLOWALL');return{mode,template};}};}};return template;}}
  });
  vm.runInContext(source,context,{filename:'Code.gs'});
@@ -183,9 +184,51 @@ test('last available response slot can append, flush and verify',()=>{const h=ha
 test('oversized existing sheet fails closed before scanning metadata',()=>{const h=harness({maxRows:10002});saved(h.submit(valid()));while(h.rows().length<10002)h.rows().push([...h.rows()[1]]);h.calls.length=0;rejected(h.submit(valid()),/reached its limit/);assert(!h.calls.some(x=>x[0]==='read'&&x[1]===2&&x[2]===2));assert(!h.calls.some(x=>x[0]==='write'));});
 
 // Public surface and nonce-bound bridge template.
-test('only doGet and submitResponse are public top-level functions',()=>{assert.deepEqual([...source.matchAll(/^function\s+([A-Za-z0-9_]+)\(/gm)].map(x=>x[1]).filter(name=>!name.endsWith('_')).sort(),['doGet','submitResponse']);assert(!/function\s+doPost\b/.test(source));});
+test('only doGet, doPost and submitResponse are public top-level functions',()=>{assert.deepEqual([...source.matchAll(/^function\s+([A-Za-z0-9_]+)\(/gm)].map(x=>x[1]).filter(name=>!name.endsWith('_')).sort(),['doGet','doPost','submitResponse']);});
 test('bridge config contains no spreadsheet ID or properties',()=>{const h=harness();assert.deepEqual(copy(h.context.getBridgeConfig_()),{allowedParentOrigin:'https://mrh-swes.github.io',protocolVersion:1});assert.equal(h.calls.length,0);});
 test('valid nonce is JSON-injected with the fixed approved parent origin',()=>{const h=harness();const nonce='a'.repeat(32);const output=h.context.doGet({parameter:{channelNonce:nonce,parentOrigin:'https://attacker.invalid'}});assert.equal(output.mode,'ALLOWALL');assert.equal(output.template.channelNonceJson,JSON.stringify(nonce));assert.equal(output.template.parentOriginJson,JSON.stringify('https://mrh-swes.github.io'));assert(!h.calls.some(x=>x[0]==='open'||x[0]==='properties'));});
 for(const nonce of [undefined,'','a'.repeat(31),'a'.repeat(33),'A'.repeat(32),'<script>alert(1)</script>'])test(`missing/invalid bridge nonce is inert: ${String(nonce).slice(0,12)}`,()=>{const h=harness();const output=h.context.doGet({parameter:{channelNonce:nonce}});assert.equal(typeof output.html,'string');assert(!output.html.includes('<script'));assert(!h.calls.some(x=>x[0]==='template'));});
 test('doGet without event is inert',()=>{const h=harness();assert.equal(typeof h.context.doGet().html,'string');});
+
+// Read-only health route and simple-request POST JSON route.
+const postEvent = payload => ({queryString:null,parameter:{},parameters:{},postData:{type:'text/plain;charset=UTF-8',contents:JSON.stringify(payload)}});
+const postResult = (h,event) => {const output=h.context.doPost(event);assert.equal(output.mimeType,'application/json');return JSON.parse(output.text);};
+test('exact health=1 returns only fixed public JSON without properties, locks, or sheet access',()=>{
+ const h=harness();const out=h.context.doGet({queryString:'health=1',parameter:{health:'1'},parameters:{health:['1']}});
+ assert.equal(out.mimeType,'application/json');assert.deepEqual(JSON.parse(out.text),{ok:true,service:'staff-rsvp',protocolVersion:2});assert.deepEqual(h.calls.map(x=>x[0]),['json']);
+});
+for(const event of [
+ {queryString:'health=1&payload=x',parameter:{health:'1',payload:'x'}},
+ {queryString:'health=1&health=1',parameter:{health:'1'},parameters:{health:['1','1']}},
+ {queryString:'health=1',parameter:{health:'1'},parameters:{health:['1','1']}},
+ {queryString:'health=1',parameter:{health:'1',requestId:id(1)}},
+ {queryString:'health=01',parameter:{health:'01'}},
+ {parameter:{health:'1'}},
+ {queryString:'payload='+encodeURIComponent(JSON.stringify(valid())),parameter:{payload:JSON.stringify(valid())}}
+])test('GET never accepts a payload or ambiguous health query '+String(event.queryString).slice(0,45),()=>{
+ const h=harness();const out=h.context.doGet(event);assert.equal(typeof out.html,'string');assert.equal(h.rows().length,0);assert(!h.calls.some(x=>['json','lock','properties','open'].includes(x[0])));
+});
+test('nonce bridge still cannot submit answers through GET parameters',()=>{
+ const h=harness();h.context.doGet({queryString:'channelNonce='+ 'a'.repeat(32)+'&payload=x',parameter:{channelNonce:'a'.repeat(32),payload:JSON.stringify(valid())}});
+ assert.deepEqual(h.calls.map(x=>x[0]),['template']);assert.equal(h.rows().length,0);
+});
+test('text/plain JSON POST returns exact verified acknowledgement and all answers',()=>{const h=harness(),p=valid();saved(postResult(h,postEvent(p)));assert.equal(h.rows().length,2);assert.equal(h.rows()[1][1],p.requestId);});
+test('POST application/json is also accepted without changing the contract',()=>{const h=harness(),e=postEvent(valid());e.postData.type='application/json';saved(postResult(h,e));});
+test('POST and RPC retries deduplicate across both transports',()=>{const h=harness(),p=valid();saved(h.submit(p));saved(postResult(h,postEvent(p)));saved(h.submit(p));assert.equal(h.rows().length,2);});
+test('POST cannot overwrite a conflicting request ID',()=>{const h=harness(),p=valid();saved(postResult(h,postEvent(p)));p.answers.question='changed';rejected(postResult(h,postEvent(p)),/different answers/);assert.equal(h.rows().length,2);});
+test('POST never reports saved on an incomplete write',()=>{const h=harness({state:{dropCell:11}}),p=valid();p.answers.question='must persist';rejected(postResult(h,postEvent(p)),/couldn’t confirm/);});
+test('POST ambiguous committed write safely recovers with the same request ID',()=>{const h=harness({state:{failWriteAfterStore:true}}),p=valid();rejected(postResult(h,postEvent(p)));h.state.failWriteAfterStore=false;saved(postResult(h,postEvent(p)));assert.equal(h.rows().length,2);});
+for(const [label,event] of [
+ ['missing event',undefined],['missing post data',{}],['malformed JSON',{postData:{type:'text/plain',contents:'{bad'}}],
+ ['form data',{postData:{type:'application/x-www-form-urlencoded',contents:'payload=x'}}],
+ ['HTML',{postData:{type:'text/html',contents:'<script>private text</script>'}}],
+ ['query payload',{...postEvent(valid()),queryString:'payload=private'}],
+ ['array body',postEvent([])],['null body',postEvent(null)],['extra envelope key',postEvent({...valid(),sheetId:'private'})],
+ ['missing name',postEvent({...valid(),responseName:''})],
+ ['oversized body',{postData:{type:'text/plain',contents:' '.repeat(20001)}}],
+ ['oversized UTF-8 body',{postData:{type:'text/plain',contents:'字'.repeat(7000)}}],
+ ['invalid body type',{postData:{type:'text/plain',contents:{private:'value'}}}]
+])test('POST rejects '+label+' before sheet access and returns only safe JSON',()=>{const h=harness();const r=postResult(h,event);rejected(r);assert.equal(h.rows().length,0);assert(!h.calls.some(x=>x[0]==='lock'||x[0]==='open'));assert(!JSON.stringify(r).includes('private'));});
+test('POST retains UTF-8 name and written-text limits at the accepted maximum',()=>{const h=harness(),p=valid();p.answers.example='字'.repeat(500);p.answers.question='語'.repeat(3000);saved(postResult(h,postEvent(p)));});
+
 console.log(`\n${count} Apps Script backend tests passed. No external services were contacted.`);

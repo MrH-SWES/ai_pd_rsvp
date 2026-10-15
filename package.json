@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-site.mjs",
-    "typecheck": "tsc --noEmit --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx --lib es2022,dom --allowSyntheticDefaultImports --skipLibCheck src/*.tsx lib/*.ts",
-    "test": "node tests.mjs && node check-ui.mjs && node --test test-dictation.mjs sheets/test-transport.mjs sheets/test-ui.mjs sheets/test-code.mjs && node --test backend/test/worker.test.js",
+    "typecheck": "tsc --noEmit --allowImportingTsExtensions --target es2022 --module esnext --moduleResolution bundler --jsx react-jsx --lib es2022,dom --allowSyntheticDefaultImports --skipLibCheck src/*.tsx lib/*.ts",
+    "test": "node tests.mjs && node check-ui.mjs && node --test test-dictation.mjs sheets/test-transport.mjs sheets/test-pending.mjs sheets/test-fetch.mjs sheets/test-ui.mjs sheets/test-code.mjs && node --test backend/test/worker.test.js",
     "verify": "npm test && npm run typecheck && npm run build"
   },
   "dependencies": {"lucide-react": "1.31.0", "react": "19.2.6", "react-dom": "19.2.6"},

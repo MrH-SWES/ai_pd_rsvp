@@ -48,6 +48,10 @@ var RSVP_ERRORS_ = {
 
 /** Serves only a nonce-bound HTML bridge. Query parameters cannot choose an origin. */
 function doGet(e) {
+  // Public, read-only transport diagnostic. No payload or arbitrary query accepted.
+  if (isHealthRequest_(e)) {
+    return jsonOutput_({ok: true, service: 'staff-rsvp', protocolVersion: 2});
+  }
   var nonce = e && e.parameter && e.parameter.channelNonce;
   if (typeof nonce !== 'string' || !/^[a-f0-9]{32}$/.test(nonce)) {
     return HtmlService.createHtmlOutput('<!doctype html><html><head><meta charset="utf-8"><title>Staff RSVP</title></head><body>Open the staff-session invitation to send a response.</body></html>');
@@ -58,7 +62,43 @@ function doGet(e) {
   return template.evaluate().setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-/** The only public data operation. It never returns names, answers, or sheet details. */
+/** Simple CORS request candidate: JSON body under text/plain, without cookies.
+ * ContentService follows Google's redirect policy. The deployment's real CORS
+ * behavior must be verified before a browser client relies on this route.
+ */
+function doPost(e) {
+  try {
+    if (!e || (e.queryString !== null && e.queryString !== undefined && e.queryString !== '') ||
+        !e.postData || typeof e.postData.contents !== 'string' ||
+        typeof e.postData.type !== 'string' ||
+        !/^(?:text\/plain|application\/json)(?:\s*;\s*charset=utf-8)?$/i.test(e.postData.type)) fail_('input');
+    var raw = e.postData.contents;
+    // Reject before JSON parsing, locks, or any spreadsheet access.
+    if (raw.length > RSVP_MAX_INPUT_BYTES_ ||
+        Utilities.newBlob(raw, 'application/json').getBytes().length > RSVP_MAX_INPUT_BYTES_) fail_('size');
+    var payload;
+    try { payload = JSON.parse(raw); } catch (ignored) { fail_('input'); }
+    // Share the exact same validation, lock, deduplication and read-back path.
+    return jsonOutput_(submitResponse(payload));
+  } catch (error) {
+    var key = error && error.rsvpErrorKey;
+    return jsonOutput_({ok: false, requestId: '', error: Object.prototype.hasOwnProperty.call(RSVP_ERRORS_, key) ? RSVP_ERRORS_[key] : RSVP_ERRORS_.save});
+  }
+}
+
+function isHealthRequest_(e) {
+  if (!e || e.queryString !== 'health=1' || !isRecord_(e.parameter) ||
+      Object.keys(e.parameter).length !== 1 || e.parameter.health !== '1') return false;
+  if (e.parameters && (!isRecord_(e.parameters) || Object.keys(e.parameters).length !== 1 ||
+      !Array.isArray(e.parameters.health) || e.parameters.health.length !== 1 || e.parameters.health[0] !== '1')) return false;
+  return true;
+}
+
+function jsonOutput_(value) {
+  return ContentService.createTextOutput(JSON.stringify(value)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** The shared append-only operation. It never returns names, answers, or sheet details. */
 function submitResponse(payload) {
   var requestId = '';
   var lock = null;

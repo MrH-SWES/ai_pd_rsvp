@@ -1,4 +1,4 @@
-import type {Answer} from './survey';
+import {validateAnswer,sampleSessions,type Answer} from './survey.ts';
 
 export const PARENT_ORIGIN='https://mrh-swes.github.io';
 export const BRIDGE_VERSION=1;
@@ -23,6 +23,21 @@ export function randomHex(bytes=16):string {
 export function createSubmission(responseName:string,answers:Answer):Submission {
  return {requestId:crypto.randomUUID(),responseName:normalizeResponseName(responseName),answers:JSON.parse(JSON.stringify(answers))};
 }
+export function validSubmission(value:unknown):value is Submission {
+ try {
+  if(!value||typeof value!=='object'||Array.isArray(value))return false;
+  const p=value as Submission;
+  if(Object.keys(p).sort().join(',')!=='answers,requestId,responseName'||
+   typeof p.requestId!=='string'||!(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/).test(p.requestId)||
+   typeof p.responseName!=='string'||!p.answers||typeof p.answers!=='object'||Array.isArray(p.answers))return false;
+  normalizeResponseName(p.responseName);
+  const required=['experience','tools','uses','beliefs','blockers','example','question','availability'];
+  if(Object.keys(p.answers).some(k=>!required.includes(k)&&k!=='interest')||required.some(k=>!Object.prototype.hasOwnProperty.call(p.answers,k)))return false;
+  for(const k of ['tools','uses','beliefs','blockers','availability'] as const)if(!Array.isArray(p.answers[k])||Object.keys(p.answers[k]).length!==p.answers[k].length)return false;
+  validateAnswer(p.answers,sampleSessions);
+  return new TextEncoder().encode(JSON.stringify(p)).length<=MAX_ENVELOPE_BYTES;
+ }catch{return false;}
+}
 export function isBridgeDescendant(source:Window|null,frame:Window|null):boolean {
  if(!source||!frame)return false;
  try {let node:Window=source;for(let i=0;i<8;i++){if(node===frame)return true;const parent=node.parent;if(parent===node)return false;node=parent;}}catch{/* Fail closed on unsupported WindowProxy access. */}
@@ -37,7 +52,7 @@ export function createSheetsTransport(endpoint:string,host:Window=window,doc:Doc
   return new Promise((resolve,reject)=>{
    const nonce=randomHex(),frame=doc.createElement('iframe');let bridge:Window|null=null,bridgeOrigin='',finished=false,sent=false;
    frame.hidden=true;frame.setAttribute('aria-hidden','true');frame.setAttribute('tabindex','-1');frame.title='Save your response';frame.referrerPolicy='no-referrer';
-   const timeout=host.setTimeout(()=>finish(Error('We couldn’t confirm that your response was saved. Retry to check safely; your answers will stay the same.')),timeoutMs);
+   let timeout=host.setTimeout(()=>finish(Error('The Google response service did not connect in this page. Your save is unconfirmed. Retry with these same answers in a moment.')),Math.min(timeoutMs,15000));
    function finish(value:Error|SaveAck){if(finished)return;finished=true;host.clearTimeout(timeout);host.removeEventListener('message',receive);frame.remove();value instanceof Error?reject(value):resolve(value);}
    function receive(event:MessageEvent){
     const data=event.data;
@@ -45,6 +60,7 @@ export function createSheetsTransport(endpoint:string,host:Window=window,doc:Doc
     if(data.type==='pd-rsvp-ready'&&!sent){
      if(!validBridgeOrigin(event.origin)||!isBridgeDescendant(event.source as Window|null,frame.contentWindow))return;
      bridge=event.source as Window;bridgeOrigin=event.origin;sent=true;
+     host.clearTimeout(timeout);timeout=host.setTimeout(()=>finish(Error('We couldn’t confirm that your response was saved. Retry safely with these same answers.')),timeoutMs);
      bridge.postMessage({type:'pd-rsvp-submit',version:BRIDGE_VERSION,channelNonce:nonce,payload},bridgeOrigin);return;
     }
     if(!sent||event.source!==bridge||event.origin!==bridgeOrigin||data.type!=='pd-rsvp-ack'||data.requestId!==payload.requestId)return;
@@ -58,3 +74,4 @@ export function createSheetsTransport(endpoint:string,host:Window=window,doc:Doc
   });
  }};
 }
+

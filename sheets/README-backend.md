@@ -12,7 +12,7 @@ Run locally from the project root with Node 24 or another Node version supportin
 node sheets/test-code.mjs
 ```
 
-The current suite has 107 tests. It makes no network requests and requires no Google account or credentials. Its mocks establish local validation/control-flow behavior; they do not establish Google deployment permissions, actual iframe behavior, or live storage availability.
+The current suite has 136 tests. It makes no network requests and requires no Google account or credentials. Its mocks establish local validation/control-flow behavior; they do not establish Google deployment permissions, actual iframe behavior, or live storage availability.
 
 ## Owner setup, when deployment is authorized
 
@@ -31,9 +31,13 @@ The script also maintains `RSVP_RATE_START_MS` and `RSVP_RATE_COUNT` in Script P
 
 ## Bridge and public API
 
-The only public top-level functions are `doGet(e)` and `submitResponse(payload)`. There is no `doPost`, exported response reader, lookup API, administrative reset, or public sheet-management function. All helpers end in `_`, which makes them unavailable through `google.script.run`.
+The only public top-level functions are `doGet(e)`, `doPost(e)`, and `submitResponse(payload)`. There is no exported response reader, lookup API, administrative reset, or public sheet-management function. All helpers end in `_`, which makes them unavailable through `google.script.run`.
 
-`doGet(e)` requires `e.parameter.channelNonce` to be exactly 32 lowercase hex characters. A missing or invalid nonce returns an inert page. A valid nonce renders the `Bridge` template with:
+The exact query `?health=1`, with no extra or repeated parameters, returns ContentService JSON `{"ok":true,"service":"staff-rsvp","protocolVersion":2}`. It reads no Script Properties or spreadsheet and performs no writes. This is a public transport diagnostic, not proof that collection is operational. Other GET queries cannot submit responses.
+
+`doPost(e)` accepts a JSON envelope in a `text/plain;charset=UTF-8` or `application/json` body, rejects nonempty query strings, and bounds the complete body to 20,000 UTF-8 bytes before JSON parsing. It invokes the same `submitResponse` validation, locking, deduplication and verified write path, then returns only a JSON acknowledgment. Form-encoded submissions are not supported. ContentService redirects must be followed. Live checks verified the deployed credential-free CORS health/POST route from the actual GitHub Pages origin before enabling the current browser transport. Re-verify that behavior when changing deployments; local mocks cannot establish it.
+
+For the existing HTML bridge, `doGet(e)` requires `e.parameter.channelNonce` to be exactly 32 lowercase hex characters. A missing or invalid nonce returns an inert page. A valid nonce renders the `Bridge` template with:
 
 ```text
 parentOriginJson = JSON.stringify('https://mrh-swes.github.io')
