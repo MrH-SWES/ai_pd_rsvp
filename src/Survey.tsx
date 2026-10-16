@@ -31,7 +31,7 @@ export default function Home(){
   hasRevealed.current=true;hasGreeted.current=true;
  },[]);
  useEffect(()=>{if(revealing&&reducedMotion)completeReveal();},[revealing,reducedMotion]);
- useEffect(()=>{if(!revealing)return;skipAnimation.current?.focus();const skip=(event:KeyboardEvent)=>{if(event.key==='Escape')completeReveal();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[revealing]);
+ useEffect(()=>{if(!revealing)return;skipAnimation.current?.focus({preventScroll:true});const skip=(event:KeyboardEvent)=>{if(event.key==='Escape')completeReveal();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[revealing]);
  useEffect(()=>{const t=new URLSearchParams(location.hash.slice(1)).get('invite');if(!t){setDemo(!sheetsEndpoint);setLoading(false);return;}setDemo(false);setToken(t);if(!apiBase){setError('Response collection is not connected yet. Please check back once setup is complete.');setLoading(false);return;}fetch(apiBase+'/api/invitation',{headers:{'X-Invitation':t}}).then(async r=>{const x:any=await r.json();if(!r.ok)throw Error(x.error);setSessions(x.sessions);if(typeof x.name==='string'){setName(cleanName(x.name));}if(!x.sessions.length)setError('Session dates are still being confirmed. Please return after they are announced.');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
 
  const steps=answers.experience==='Not yet'?[0,0.1,0.2,1,4,5,6,7,8,9]:[0,0.1,0.2,1,2,3,4,5,6,7,8,9];

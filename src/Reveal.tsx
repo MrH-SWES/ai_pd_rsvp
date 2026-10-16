@@ -28,6 +28,40 @@ function makeCracks(){
  svg.setAttribute('viewBox','0 0 100 100');svg.setAttribute('preserveAspectRatio','none');svg.setAttribute('class','crack-map');svg.setAttribute('aria-hidden','true');
  crackPaths.forEach((d,i)=>{const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',d);path.setAttribute('pathLength','1');path.setAttribute('style',`animation-delay:${i*12}ms`);svg.appendChild(path);});return svg;
 }
+export const SHATTER_FALLBACK_MS=2400;
+// Give the paused fragments a paint opportunity before starting. Finish from
+// their actual animation events, not a deadline that can expire before paint.
+// Hidden tabs pause the CSS and safety clock together; resizing never skips.
+export function playShatter(host:HTMLElement,onComplete:()=>void){
+ let disposed=false,started=false,frame=0,cancelFallback=()=>{};
+ const pending=new Set<EventTarget>(Array.from(host.querySelectorAll('.form-shard')));
+ function dispose(){
+  if(disposed)return;disposed=true;
+  cancelAnimationFrame(frame);cancelFallback();
+  host.classList.remove('shatter-playing');
+  host.removeEventListener('animationend',ended);
+  document.removeEventListener('visibilitychange',visibility);
+ }
+ function complete(){if(disposed)return;dispose();onComplete();}
+ function ended(event:AnimationEvent){
+  if(event.animationName!=='shard-fall'||!event.target||!pending.delete(event.target))return;
+  if(!pending.size&&!document.hidden)complete();
+ }
+ function visibility(){
+  if(started&&!document.hidden&&!pending.size){complete();return;}
+  host.classList.toggle('shatter-playing',started&&!document.hidden);
+  if(started||document.hidden||frame||disposed)return;
+  frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(()=>{
+   frame=0;if(disposed||document.hidden)return;
+   started=true;host.classList.add('shatter-playing');
+   // A bounded escape hatch if animation events are unavailable or CSS fails.
+   cancelFallback=visibleTimeout(complete,SHATTER_FALLBACK_MS);
+  });});
+ }
+ host.addEventListener('animationend',ended);
+ document.addEventListener('visibilitychange',visibility);visibility();
+ return dispose;
+}
 // Twenty bounded fragments, each containing an inert copy of the actual form.
 // No bitmap capture, external assets, focusable duplicates, or persistent overlay.
 export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|null>,onComplete:()=>void}){
@@ -49,10 +83,8 @@ export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|n
    face.append(copy,makeCracks());piece.append(face);host.append(piece);
   });
   const cracks=makeCracks();cracks.classList.add('crack-onset');host.append(cracks);
-  const timer=setTimeout(onComplete,1320);
-  const resized=()=>onComplete();
-  window.addEventListener("resize",resized);
-  return()=>{clearTimeout(timer);window.removeEventListener("resize",resized);host.replaceChildren();};
+  const stop=playShatter(host,onComplete);
+  return()=>{stop();host.replaceChildren();};
  },[]);
  return <div ref={layer} className="shatter-layer" aria-hidden="true" inert />;
 }
