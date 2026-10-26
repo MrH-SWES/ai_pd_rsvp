@@ -29,46 +29,79 @@ function makeCracks(){
  crackPaths.forEach((d,i)=>{const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',d);path.setAttribute('pathLength','1');path.setAttribute('style',`animation-delay:${i*12}ms`);svg.appendChild(path);});return svg;
 }
 export const SHATTER_FALLBACK_MS=2400;
-// Give the paused fragments a paint opportunity before starting. Finish from
-// their actual animation events, not a deadline that can expire before paint.
-// Hidden tabs pause the CSS and safety clock together; resizing never skips.
-export function playShatter(host:HTMLElement,onComplete:()=>void){
- let disposed=false,started=false,frame=0,cancelFallback=()=>{};
- const pending=new Set<EventTarget>(Array.from(host.querySelectorAll('.form-shard')));
+export const SHATTER_STATIC_MS=900;
+// Static fractures are present from the first render, independent of cloning,
+// clipping and animation. Every automatic completion gets foreground paint time.
+export function playShatter(host:HTMLElement,onComplete:()=>void,{reduced=false,canAnimate=true}={}){
+ let disposed=false,started=false,staticFrame=reduced||!canAnimate,frame=0,cancelFallback=()=>{};
+ const shards=Array.from(host.querySelectorAll('.form-shard'));
+ const pending=new Set<EventTarget>(shards);
+ function playing(on:boolean){
+  host.classList.toggle('shatter-playing',on);
+  host.parentElement?.classList.toggle('shatter-animated',on&&!staticFrame);
+ }
  function dispose(){
   if(disposed)return;disposed=true;
-  cancelAnimationFrame(frame);cancelFallback();
-  host.classList.remove('shatter-playing');
+  cancelAnimationFrame(frame);cancelFallback();playing(false);
   host.removeEventListener('animationend',ended);
+  host.removeEventListener('animationcancel',cancelled);
   document.removeEventListener('visibilitychange',visibility);
  }
  function complete(){if(disposed)return;dispose();onComplete();}
+ function showStatic(){
+  if(disposed)return;
+  staticFrame=true;cancelFallback();playing(false);
+  host.classList.add('shatter-static');
+  // Restart the paint gate before timing a newly displayed fallback.
+  started=false;cancelAnimationFrame(frame);frame=0;visibility();
+ }
  function ended(event:AnimationEvent){
-  if(event.animationName!=='shard-fall'||!event.target||!pending.delete(event.target))return;
+  if(staticFrame||!started||event.animationName!=='shard-fall'||!event.target||!pending.delete(event.target))return;
   if(!pending.size&&!document.hidden)complete();
  }
+ function cancelled(event:AnimationEvent){
+  if(!staticFrame&&event.animationName==='shard-fall'&&event.target&&pending.has(event.target))showStatic();
+ }
+ function animationAvailable(){
+  try{return shards.length>0&&shards.every(shard=>{
+   const style=getComputedStyle(shard);
+   return style.animationName==='shard-fall'&&parseFloat(style.animationDuration)>=.1&&style.animationPlayState==='running';
+  });}catch{return false;}
+ }
  function visibility(){
-  if(started&&!document.hidden&&!pending.size){complete();return;}
-  host.classList.toggle('shatter-playing',started&&!document.hidden);
-  if(started||document.hidden||frame||disposed)return;
+  if(disposed)return;
+  if(started&&!staticFrame&&!document.hidden&&!pending.size){complete();return;}
+  if(started){playing(!staticFrame&&!document.hidden);return;}
+  if(document.hidden||frame)return;
   frame=requestAnimationFrame(()=>{frame=requestAnimationFrame(()=>{
    frame=0;if(disposed||document.hidden)return;
-   started=true;host.classList.add('shatter-playing');
-   // A bounded escape hatch if animation events are unavailable or CSS fails.
-   cancelFallback=visibleTimeout(complete,SHATTER_FALLBACK_MS);
+   started=true;
+   if(staticFrame){cancelFallback=visibleTimeout(complete,SHATTER_STATIC_MS);return;}
+   host.classList.remove('shatter-static');playing(true);
+   if(!animationAvailable()){showStatic();return;}
+   // Missing events must show fractures too, never jump from an intact form.
+   cancelFallback=visibleTimeout(showStatic,SHATTER_FALLBACK_MS);
   });});
  }
+ host.classList.add('shatter-static');
  host.addEventListener('animationend',ended);
+ host.addEventListener('animationcancel',cancelled);
  document.addEventListener('visibilitychange',visibility);visibility();
  return dispose;
 }
 // Twenty bounded fragments, each containing an inert copy of the actual form.
 // No bitmap capture, external assets, focusable duplicates, or persistent overlay.
-export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|null>,onComplete:()=>void}){
+export function Shatter({surface,reduced,onComplete}:{surface:RefObject<HTMLDivElement|null>,reduced:boolean,onComplete:()=>void}){
  const layer=useRef<HTMLDivElement>(null);
+ const next=useRef(onComplete);next.current=onComplete;
  useLayoutEffect(()=>{
-  const source=surface.current,host=layer.current;if(!source||!host){onComplete();return;}
+  const source=surface.current,host=layer.current;if(!host)return;
+  const pieces=document.createElement('div');pieces.className='shard-pieces';
+  let canAnimate=false;
+  try{
+  if(!source||reduced||!CSS.supports('clip-path','polygon(0% 0%,100% 0%,0% 100%)'))throw new Error('Use static fractures');
   const {width,height}=source.getBoundingClientRect();
+  if(width<=0||height<=0)throw new Error('Surface has no layout');
   host.style.width=`${width}px`;host.style.height=`${height}px`;host.style.right="auto";host.style.bottom="auto";
   const padding=getComputedStyle(source).padding;
   shardPolygons.forEach((polygon,i)=>{
@@ -80,13 +113,18 @@ export function Shatter({surface,onComplete}:{surface:RefObject<HTMLDivElement|n
    const copy=source.cloneNode(true) as HTMLElement;copy.removeAttribute('aria-hidden');copy.style.cssText=`width:${width}px;height:${height}px;min-height:0;padding:${padding};`;
    copy.querySelectorAll('[id]').forEach(el=>el.removeAttribute('id'));
    copy.querySelectorAll('input,button,a,textarea,select').forEach(el=>{el.setAttribute('tabindex','-1');el.removeAttribute('name');if(el instanceof HTMLInputElement||el instanceof HTMLButtonElement)el.disabled=true;});
-   face.append(copy,makeCracks());piece.append(face);host.append(piece);
+   face.append(copy,makeCracks());piece.append(face);pieces.append(piece);
   });
-  const cracks=makeCracks();cracks.classList.add('crack-onset');host.append(cracks);
-  const stop=playShatter(host,onComplete);
-  return()=>{stop();host.replaceChildren();};
- },[]);
- return <div ref={layer} className="shatter-layer" aria-hidden="true" inert />;
+  const cracks=makeCracks();cracks.classList.add('crack-onset');pieces.append(cracks);host.append(pieces);canAnimate=true;
+  }catch{
+   // The original inert form plus the declarative SVG remain visible even if
+   // geometry, computed styles or DOM cloning are unavailable.
+   pieces.remove();
+  }
+  const stop=playShatter(host,()=>next.current(),{reduced,canAnimate});
+  return()=>{stop();pieces.remove();host.removeAttribute('style');};
+ },[reduced]);
+ return <div ref={layer} className="shatter-layer shatter-static" aria-hidden="true" inert><svg className="static-cracks" viewBox="0 0 100 100" preserveAspectRatio="none">{crackPaths.map((d,i)=><path key={i} d={d}/>)}</svg></div>;
 }
 // Match the existing cadence exactly, including the opening pause and comma beat.
 export function typingDelay(count:number,previous?:string){return count===0?850:previous===','?360:previous===' '?105:58+(count%3)*28;}
