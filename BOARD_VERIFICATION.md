@@ -10,7 +10,7 @@ Updated October 15, 2026.
 - The terminal displays only green `Wake up, FirstName...` text on solid black. A generic link displays `Wake up...`.
 - Per-character typing is unchanged: 850 ms initial pause, 360 ms after commas, 105 ms after spaces, otherwise 58 + (character count modulo 3) × 28 ms. The caret blinks after completion.
 - Click, tap, Enter, or Space advances only after typing is complete. Automatic advance waits five foreground seconds after the last character. All reveal clocks pause while the tab is hidden.
-- Reduced motion shows a motionless fractured form for 900 foreground milliseconds before the joke, and bypasses pan, typing, and fade. The joke has a Continue button; the terminal is keyboard-focusable and manually advanced, with no automatic advance.
+- Reduced motion bypasses shatter, pan, typing, and fade. The joke has a Continue button; the terminal is keyboard-focusable and manually advanced, with no automatic advance.
 - A permanent top-down two-dimensional storymap holds every scene. The camera translates over one dotted surface with route hairlines, shared registration marks, and visible gaps between panels. Panels do not crossfade. Yes moves east; No moves south. The remainder winds around the same surface.
 - Only the active panel is accessible and interactive. Scene changes reset its scroll and focus the destination heading. Escape/Skip movement finishes a pan.
 - The No branch ends politely without submitting. Interest and experience remain separate; first-time users skip tools/use questions.
@@ -31,4 +31,4 @@ The terminal contains no name-source disclaimer or other visible text. The revie
 - 12 unchanged backend regression tests
 - TypeScript no-emit check and production bundle
 
-The original verification could not launch local headless Chromium. Local Chrome verification of the October 25 shatter fix now passes; see `SHATTER_VERIFICATION.md` for exact scenarios and reproduction steps. Physical mobile and real-microphone testing are not claimed.
+Local headless Chromium could not launch in the execution sandbox. Actual browser smoke-test results and screenshots are recorded separately after deployment. Physical mobile and real-microphone testing are not claimed.

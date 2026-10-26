@@ -23,13 +23,14 @@ export default function Home(){
  const revealingRef=useRef(false);
  const reducedMotion=useReducedMotion();
  function completeReveal(){hasRevealed.current=true;revealingRef.current=false;setRevealing(false);setStep(-.75);}
- function reveal(){if(revealingRef.current)return;revealingRef.current=true;if(hasRevealed.current){completeReveal();return;}setRevealing(true);}
+ function reveal(){if(revealingRef.current)return;revealingRef.current=true;if(reducedMotion||hasRevealed.current){completeReveal();return;}setRevealing(true);}
  useEffect(()=>{
   if(!recovery.payload)return;
   setAnswers(JSON.parse(JSON.stringify(recovery.payload.answers)));
   setResponseName(recovery.payload.responseName);setStep(9);
   hasRevealed.current=true;hasGreeted.current=true;
  },[]);
+ useEffect(()=>{if(revealing&&reducedMotion)completeReveal();},[revealing,reducedMotion]);
  useEffect(()=>{if(!revealing)return;skipAnimation.current?.focus({preventScroll:true});const skip=(event:KeyboardEvent)=>{if(event.key==='Escape')completeReveal();};window.addEventListener('keydown',skip);return()=>window.removeEventListener('keydown',skip);},[revealing]);
  useEffect(()=>{const t=new URLSearchParams(location.hash.slice(1)).get('invite');if(!t){setDemo(!sheetsEndpoint);setLoading(false);return;}setDemo(false);setToken(t);if(!apiBase){setError('Response collection is not connected yet. Please check back once setup is complete.');setLoading(false);return;}fetch(apiBase+'/api/invitation',{headers:{'X-Invitation':t}}).then(async r=>{const x:any=await r.json();if(!r.ok)throw Error(x.error);setSessions(x.sessions);if(typeof x.name==='string'){setName(cleanName(x.name));}if(!x.sessions.length)setError('Session dates are still being confirmed. Please return after they are announced.');}).catch(e=>setError(e.message)).finally(()=>setLoading(false));},[]);
 
@@ -72,7 +73,7 @@ export default function Home(){
  const ready=step===0.1?!!answers.interest:step!==1||!!answers.experience;
  if(step===-1)return <div className={'entry-wrap '+(revealing?'shattering':hasRevealed.current?'revealed':'')}>
   <div ref={formSurface} className="form-scene" aria-hidden={revealing||undefined} inert={revealing}><main className="form-frame"><div className="familiar-topline">SWES · PROFESSIONAL DEVELOPMENT</div><section className="familiar-card familiar-title"><h1 tabIndex={-1}>Staff AI session</h1><p>Please complete this form to express your interest.</p><div className="familiar-divider"/><p className="familiar-required">* Indicates required question</p></section><form onSubmit={e=>{e.preventDefault();reveal();}}><section className="familiar-card"><label htmlFor="decoy-name">Name <span aria-hidden="true">*</span></label><input id="decoy-name" autoComplete="off" readOnly placeholder="Your answer" disabled={revealing} onFocus={()=>reveal()} onClick={()=>reveal()} aria-label="Name. Open the invitation"/><p className="familiar-note">Start with your name.</p></section><div className="familiar-actions"><button type="submit" disabled={revealing}>Next</button><button type="button" className="skip-name" disabled={revealing} onClick={completeReveal}>Skip intro</button></div></form><p className="familiar-footnote">A custom staff-session site. No Google sign-in needed.<br/>{demo&&'Design preview · No response is submitted.'}</p></main></div>
-  {revealing&&<><Shatter surface={formSurface} reduced={reducedMotion} onComplete={completeReveal}/><button ref={skipAnimation} className="skip-animation shatter-skip" onClick={completeReveal}>Skip animation</button></>}
+  {revealing&&<><Shatter surface={formSurface} onComplete={completeReveal}/><button ref={skipAnimation} className="skip-animation shatter-skip" onClick={completeReveal}>Skip animation</button></>}
  </div>;
  if(step===-.75)return <Joke active={currentStep===-.75} reduced={reducedMotion} onContinue={()=>setStep(-.5)}/>;
  if(step===-.5)return <Greeting name={name} active={currentStep===-.5} reduced={reducedMotion} instant={reducedMotion||hasGreeted.current} onContinue={()=>{hasGreeted.current=true;setStep(0)}}/>;
